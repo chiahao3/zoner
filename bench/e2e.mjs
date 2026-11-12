@@ -583,6 +583,36 @@ const lb3 = await pf.evaluate(() => ({ p: window.zoner.store.p.lateralRes, on: d
 check('λ/β checkbox fills the lateral resolution (64 mrad: 0.308 Å, 60 mrad: 0.328 Å); typing a value unchecks it',
   lb1.v === 0.308 && lb1.p === 0.308 && lb2.p === 0.328 && lb2.on && lb3.p === 0.5 && !lb3.on, { lb1, lb2, lb3 });
 await pf.evaluate(() => window.zoner.store.set('collAngle', 64));
+// stereogram double-click: on a zone marker it keeps the zone snap; elsewhere it goes to the
+// direction that was under the pointer (regression: the dblclick used to re-read a half-rotated map)
+const dbl = {};
+for (const what of ['marker', 'empty']) {
+  await pf.evaluate(() => { const z = window.zoner, s = z.store; s.set('mapSyncDP', false); s.set('mapRange', 20); s.loadCrystal('Si'); s.mountZone([1, 1, 0]); s.setTilt(4 * Math.PI / 180, 2 * Math.PI / 180); z.markAll(); });
+  await pf.waitForTimeout(500);
+  const mb = await pf.locator('#map-ov').boundingBox();
+  const tgt = await pf.evaluate((what) => {
+    const z = window.zoner, r = document.getElementById('map-ov').getBoundingClientRect();
+    if (what === 'marker') { const m = z.mapPos([1, 1, 0]); return { x: m[0] + 3, y: m[1] - 2 }; }
+    const h = Math.min(r.width, r.height) / 2;
+    for (let k = 0; k < 400; k++) { // a point inside the map, >= 20 px from every marker
+      const a = k * 2.399, rr = h * (0.15 + 0.6 * ((k * 0.618) % 1));
+      const x = r.width / 2 + rr * Math.cos(a), y = r.height / 2 + rr * Math.sin(a);
+      if (z.map.hits.every((m) => Math.hypot(m.x - x, m.y - y) > 20)) return { x, y };
+    }
+    return null;
+  }, what);
+  const u = await pf.evaluate((t) => window.zoner.mapDirAt(t.x, t.y), tgt);
+  await pf.mouse.dblclick(mb.x + tgt.x, mb.y + tgt.y);
+  await pf.waitForTimeout(700);
+  dbl[what] = await pf.evaluate(({ u, what }) => {
+    const z = window.zoner;
+    if (what === 'marker') return z.angleTo([1, 1, 0]);
+    const R = z.store.R(), d = [0, 1, 2].map((i) => R[3 * i] * u[0] + R[3 * i + 1] * u[1] + R[3 * i + 2] * u[2]);
+    return Math.acos(Math.min(1, d[2])) * 180 / Math.PI;
+  }, { u, what });
+}
+check('stereogram double-click: on a zone marker it snaps onto the zone; elsewhere the clicked direction ends on the beam',
+  dbl.marker < 0.01 && dbl.empty < 0.01, dbl);
 // global display range: the reference zone's phase range, per image mode; auto contrast off by default
 const gr = await pf.evaluate(() => {
   const z = window.zoner, s = z.store;

@@ -199,16 +199,30 @@ attachPointer($('dp-ov'), store, {
   onDbl: () => goNearest(),
 }, endInteraction);
 
+let mapClick: { t: number; x: number; y: number; snapped: boolean; dir: Vec3 | null } | null = null;
 attachPointer($('map-ov'), store, {
   onDrag: (x, y, px, py) => {
     map.lowRes = true;
     map.drag(map.toP(px, py), map.toP(x, y));
   },
   onClick: (x, y) => {
+    // a double-click arrives as click, click, dblclick: remember what this click meant before
+    // anything moves, so the dblclick neither undoes a zone snap nor reads a half-rotated map
+    const P = map.toP(x, y);
     const hit = map.hits.find((h) => Math.hypot(h.x - x, h.y - y) < 8);
-    if (hit) animateToDir(hit.zone.dir);
+    const prev = mapClick;
+    const second = prev && performance.now() - prev.t < 600 && Math.hypot(prev.x - x, prev.y - y) < 6;
+    mapClick = second ? prev : { t: performance.now(), x, y, snapped: !!hit, dir: P[0] ** 2 + P[1] ** 2 < 1 ? map.crystalDirAt(P) : null };
+    if (hit && !second) animateToDir(hit.zone.dir);
   },
   onDbl: (x, y) => {
+    const c = mapClick;
+    if (c && performance.now() - c.t < 800 && Math.hypot(c.x - x, c.y - y) < 6) {
+      // the first click snapped to a zone: keep it; otherwise go to the direction that was under
+      // the pointer when the double-click began
+      if (!c.snapped && c.dir) animateToDir(c.dir);
+      return;
+    }
     const P = map.toP(x, y);
     if (P[0] ** 2 + P[1] ** 2 < 1) animateToDir(map.crystalDirAt(P));
   },
@@ -609,6 +623,8 @@ const zoneLab = (uvw: Vec3) => matVec(store.R(), store.crystal.lattice.dirToCart
   },
   /** CSS position of zone uvw on the stereogram */
   mapPos: (uvw: Vec3) => map.fromP(stereoForward(zoneLab(uvw))),
+  /** crystal direction under CSS point (x, y) of the stereogram */
+  mapDirAt: (x: number, y: number) => map.crystalDirAt(map.toP(x, y)),
   zoneLab,
   angleTo: (uvw: Vec3) => angleBetween(store.beamCrystal(), store.crystal.lattice.dirToCartUnit(uvw)) / DEG,
 };
