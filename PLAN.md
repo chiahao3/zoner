@@ -389,7 +389,10 @@ user asks for a release; pushing publishes.
    the new build (the asset name in the live `index.html` matches `dist/index.html`). Pages can lag a
    minute behind a green run. Optionally run the e2e against it:
    `node bench/e2e.mjs --gpu --url https://chiahao3.github.io/zoner/`.
-7. Optional: `gh release create vX.Y.Z --title "zoner X.Y.Z" --notes-file <changelog section>`
+7. If the UI looks different: `npm run build && npm run screenshot` refreshes
+   `public/screenshot.png` (README image and link-preview thumbnail; check it by eye before
+   committing). Link previews are cached by each app, so an old thumbnail can linger there.
+8. Optional: `gh release create vX.Y.Z --title "zoner X.Y.Z" --notes-file <changelog section>`
    with `dist/zoner.html` attached for offline PCs.
 
 One-time setup (already done at 0.0.4): `gh repo create zoner --public --source . --remote origin`,

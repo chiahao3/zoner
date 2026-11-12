@@ -1,5 +1,9 @@
 # zoner
 
+**Live: https://chiahao3.github.io/zoner/**
+
+![zoner: diffraction pattern, crystal model, resolution stereogram and MEP slice image of Si 0.4° off \[110\]](public/screenshot.png)
+
 A browser tool for tilting crystals onto a zone axis at the microscope. Every panel shares one
 double-tilt holder state, and you can tilt from any of them with the mouse or the arrow keys.
 
