@@ -6,11 +6,20 @@
 // Lab z points to the gun, so depth zeta is z = -zeta. Exact for a perfect crystal slab; this is
 // where tilt-induced column smearing (t tan(theta)) comes from.
 import { ReflectionSet } from './structure';
-import { Mat3 } from './linalg';
+import { Mat3, Vec3 } from './linalg';
+import { Crystal, defaultZone } from './crystal';
+import { mountForZone } from './orientation';
 import { sigmaInteraction, VOLT_A2 } from './constants';
 import { TransferParams, lateralTransfer, depthWeight, depthFT } from './transfer';
 
 export const MAX_COEF = 4096;
+
+/** Reference view for the global display range: the crystal's principal low-index zone (the one
+ *  it opens on: Si [110], SrTiO3 [001], GaN [2-1-10]) exactly on the beam. */
+export function referenceView(c: Crystal): { zone: Vec3; rot: Mat3 } {
+  const zone = defaultZone(c);
+  return { zone, rot: mountForZone(c.lattice, zone) };
+}
 
 /**
  * Coefficients in the lab frame, [gx, gy, amplitude (rad), phase] per entry, Friedel halves

@@ -9,6 +9,8 @@ import { holderOutline, mountForZone, tiltToBring } from '../src/physics/orienta
 import { Store, DEFAULTS, autoDepthRes, DEPTH_RES_MAX, autoLateralRes, LATERAL_RES_MAX, syncedMapRange } from '../src/ui/state';
 import { decodeHash, encodeHash } from '../src/ui/hash';
 import { GROUPS } from '../src/ui/controls';
+import { imageCoefficients, referenceView } from '../src/physics/image';
+import { matVec, matMul, rotY } from '../src/physics/linalg';
 
 const DEG = Math.PI / 180;
 
@@ -370,5 +372,41 @@ describe('session 4: collection angle, detector range, derived 1/A, DP hover, la
     expect(ringStep(0.5)).toBe(0.2);
     expect(ringAngles(0.5, 0.75)).toEqual([0.2, 0.4, 0.6]);
     expect(ringAngles(0.25, 0.4)).toEqual([0.1, 0.2, 0.3, 0.4]);
+  });
+});
+
+describe('session 4: global display range for the real-space image', () => {
+  const synthPP = (c: { data: Float32Array; n: number }, fov = 12, N = 96) => {
+    let lo = Infinity, hi = -Infinity;
+    for (let iy = 0; iy < N; iy++) for (let ix = 0; ix < N; ix++) {
+      const x = (ix / N - 0.5) * fov, y = (iy / N - 0.5) * fov;
+      let v = 0;
+      for (let i = 0; i < c.n; i++) v += c.data[4 * i + 2] * Math.cos(2 * Math.PI * (c.data[4 * i] * x + c.data[4 * i + 1] * y) + c.data[4 * i + 3]);
+      lo = Math.min(lo, v);
+      hi = Math.max(hi, v);
+    }
+    return hi - lo;
+  };
+  it('auto contrast is off by default (the global range shows contrast loss on mistilt)', () => {
+    expect(DEFAULTS.imgAuto).toBe(false);
+  });
+  it('the reference orientation puts the crystal\'s low-index zone exactly on the beam', () => {
+    for (const name of ['Si', 'SrTiO3', 'GaN']) {
+      const s = new Store();
+      s.loadCrystal(name);
+      const ref = referenceView(s.crystal);
+      const d = matVec(ref.rot, s.crystal.lattice.dirToCartUnit(ref.zone));
+      expect(d[2]).toBeCloseTo(1, 12);
+    }
+  });
+  it('a 3 deg mistilt keeps only a small part of the on-zone phase range (sum and slice)', () => {
+    const s = new Store();
+    const ref = referenceView(s.crystal);
+    for (const mode of ['sum', 'slice'] as const) {
+      const tp = s.transfer(mode);
+      const on = synthPP(imageCoefficients(s.refl(), ref.rot, s.crystal.lattice.volume, s.p.kV, tp));
+      const off = synthPP(imageCoefficients(s.refl(), matMul(rotY(3 * DEG), ref.rot), s.crystal.lattice.volume, s.p.kV, tp));
+      expect(off / on).toBeLessThan(mode === 'sum' ? 0.2 : 0.6);
+    }
   });
 });

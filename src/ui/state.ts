@@ -38,7 +38,7 @@ export interface Params {
   imgMode: 'sum' | 'slice'; // real-space image shown, and the depth transfer that colours the stereogram
   imgFov: number; // A
   imgCmap: string;
-  imgAuto: boolean;
+  imgAuto: boolean; // per-image min/max; off = the global range of the reference zone (physics/image referenceView)
   // stereogram
   mapRange: number; // deg half-width
   mapSyncDP: boolean; // mapRange follows the DP half-width (asin(dpRange / K)); choosing a range ends it
@@ -62,7 +62,7 @@ export const DEFAULTS: Params = {
   sliceDepth: 10, dw: 0.5,
   dpTheory: 'twobeam', dpRange: 2.2, dpDisplay: 'auto', dpDecades: 3.5, dpSpot: 2.2, kikuchi: 0.5,
   dpLabels: true, dpLaue: false, dpDetector: false, dpCmap: 'gray', blochBeams: 61,
-  imgMode: 'sum', imgFov: 20, imgCmap: 'gray', imgAuto: true,
+  imgMode: 'sum', imgFov: 20, imgCmap: 'gray', imgAuto: false,
   mapRange: 20, mapSyncDP: false, mapZoneIdx: 3, mapTraces: true, mapRings: false, mapCmap: 'viridis',
   view3d: 'slab', slabWidth: 14, atomScale: 1,
   alphaLim: 35, betaLim: 30, enforceLimits: false, step: 0.2,

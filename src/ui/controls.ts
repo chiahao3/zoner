@@ -55,7 +55,7 @@ export const GROUPS: Group[] = [
       { key: 'sliceDepth', label: 'Slice depth z', type: 'range', min: 0, max: 20, step: 0.1, unit: 'nm', title: 'centre of the displayed MEP slice below the entrance surface' },
       { key: 'imgFov', label: 'Image field of view', type: 'number', min: 4, max: 200, step: 1, unit: 'Å' },
       { key: 'imgCmap', label: 'Image colormap', type: 'select', options: CMAPS },
-      { key: 'imgAuto', label: 'Auto contrast', type: 'check', title: 'off = keep the current phase range, so contrast loss on tilting is visible' },
+      { key: 'imgAuto', label: 'Auto contrast', type: 'check', title: 'On: stretch each image to its own min/max. Off (default): a global display range per image mode, the phase range of the same image exactly on the crystal\'s low-index zone, so a mistilted crystal shows its real loss of contrast.' },
     ],
   },
   {
