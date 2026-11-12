@@ -1,10 +1,13 @@
 // Shareable state in the URL hash: non-default parameters, tilts (deg) and the holder mount.
+// v=2 (0.0.2+): one convergence angle. Links without v come from 0.0.1, where convAlpha was the
+// imaging aperture and the DP had its own dpIllum/dpAlpha; see migrate001.
 import { Store, DEFAULTS, Params } from './state';
 import { Holder } from '../physics/orientation';
 import { orthonormalize, DEG } from './util';
 
 export function encodeHash(s: Store): string {
   const q = new URLSearchParams();
+  q.set('v', '2');
   for (const k of Object.keys(DEFAULTS) as (keyof Params)[]) {
     if (s.p[k] !== DEFAULTS[k]) q.set(k, String(s.p[k]));
   }
@@ -19,6 +22,7 @@ export function encodeHash(s: Store): string {
 export function decodeHash(s: Store, hash: string): boolean {
   if (!hash || hash.length < 2) return false;
   const q = new URLSearchParams(hash.slice(1));
+  if (!q.has('v')) migrate001(q);
   const crystal = q.get('crystal');
   if (crystal && s.crystalNames.includes(crystal) && crystal !== s.p.crystal) s.loadCrystal(crystal);
   for (const k of Object.keys(DEFAULTS) as (keyof Params)[]) {
@@ -40,4 +44,17 @@ export function decodeHash(s: Store, hash: string): boolean {
   s.emit('params');
   s.emit('orientation');
   return true;
+}
+
+/** 0.0.1 -> 0.0.2: the DP convergence becomes the single convergence angle. */
+function migrate001(q: URLSearchParams) {
+  const illum = q.get('dpIllum');
+  q.delete('convAlpha'); // was the imaging aperture, not the DP
+  if (illum === 'convergent') q.set('convAlpha', q.get('dpAlpha') ?? '2');
+  else if (illum === 'parallel') q.set('convAlpha', '0');
+  q.delete('dpIllum');
+  q.delete('dpAlpha');
+  const ms = q.get('mapSource'); // the map now follows the image mode
+  if (ms === 'sum' || ms === 'slice') q.set('imgMode', ms);
+  q.delete('mapSource');
 }

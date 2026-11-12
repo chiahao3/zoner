@@ -5,7 +5,7 @@
 // Lab z points to the gun, so depth zeta is z = -zeta. Exact for a perfect crystal slab; this is
 // where tilt-induced column smearing (t tan(theta)) comes from.
 import { Store } from '../ui/state';
-import { compile, uniforms, FULLSCREEN_VS, fullscreenVAO, DataTexture, FloatTarget, GLSL_FETCH, GLSL_COLORMAPS, COLORMAP_IDS, getGL } from './gl';
+import { compile, uniforms, FULLSCREEN_VS, fullscreenVAO, DataTexture, FloatTarget, GLSL_FETCH, GLSL_COLORMAPS, COLORMAP_IDS, getGL, fitCanvas } from './gl';
 import { sigmaInteraction, VOLT_A2 } from '../physics/constants';
 import { lateralTransfer, sinc } from '../physics/transfer';
 import { overlay2D, fmt } from '../ui/util';
@@ -16,7 +16,7 @@ precision highp sampler2D;
 in vec2 v_uv;
 uniform sampler2D uC;
 uniform int uN;
-uniform float uFov;
+uniform vec2 uFov; // field of view (A) along x and y
 out vec4 o;
 ${GLSL_FETCH}
 void main() {
@@ -42,7 +42,8 @@ void main() {
   o = vec4(colormap(uCmap, (v - uLo) / max(uHi - uLo, 1e-9)), 1.0);
 }`;
 
-const N_PIX = 256;
+const N_PIX = 256; // synthesis grid along the shorter side; the longer side follows the panel aspect
+const MAX_ASPECT = 2.5;
 const MAX_COEF = 4096;
 
 export class ImageView {
@@ -56,12 +57,19 @@ export class ImageView {
   private vao2: WebGLVertexArrayObject;
   private coefTex: DataTexture;
   private target: FloatTarget;
-  private readBuf = new Float32Array(N_PIX * N_PIX * 4);
+  private readBuf = new Float32Array(Math.ceil(N_PIX * MAX_ASPECT) * N_PIX * 4);
+  private nx = N_PIX;
+  private ny = N_PIX;
   range: [number, number] = [0, 1];
   nCoef = 0;
   lastMs = 0;
+  /** last render time per mode (ms), for the info panel and benchmarks */
+  msBy: Record<'sum' | 'slice', number> = { sum: 0, slice: 0 };
+  get mode(): 'sum' | 'slice' {
+    return this.store.p.imgMode;
+  }
 
-  constructor(private store: Store, readonly mode: 'sum' | 'slice', readonly canvas: HTMLCanvasElement, readonly over: HTMLCanvasElement) {
+  constructor(private store: Store, readonly canvas: HTMLCanvasElement, readonly over: HTMLCanvasElement) {
     const gl = (this.gl = getGL(canvas));
     this.synth = compile(gl, FULLSCREEN_VS, SYNTH_FS);
     this.show = compile(gl, FULLSCREEN_VS, SHOW_FS);
@@ -75,7 +83,6 @@ export class ImageView {
     gl.bindTexture(gl.TEXTURE_2D, this.target.tex);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    canvas.width = canvas.height = 512;
   }
 
   /** Fourier coefficients (lab frame): [gx, gy, amplitude (rad), phase]. Friedel halves, x2. */
@@ -89,6 +96,7 @@ export class ImageView {
     const sz = (p.depthRes * 10) / 2.354820045;
     const list: number[][] = [];
     let amax = 0;
+    const mode = this.mode;
     for (let i = 0; i < R.n; i++) {
       const h = R.hkl[3 * i], k = R.hkl[3 * i + 1], l = R.hkl[3 * i + 2];
       if (h < 0 || (h === 0 && (k < 0 || (k === 0 && l < 0)))) continue; // Friedel half
@@ -99,7 +107,7 @@ export class ImageView {
       const lat = lateralTransfer(Math.hypot(ax, ay), p.lateralRes);
       if (lat < 1e-4) continue;
       let dm: number, dph: number;
-      if (this.mode === 'sum') {
+      if (mode === 'sum') {
         dm = T * sinc(T * az);
         dph = -Math.PI * az * T;
       } else {
@@ -123,21 +131,34 @@ export class ImageView {
     const t0 = performance.now();
     this.dirty = false;
     const gl = this.gl, p = this.store.p;
+    const [W, H] = fitCanvas(this.canvas, 1024);
+    // synthesis grid with the panel's aspect ratio; imgFov spans the shorter side
+    const asp = Math.min(MAX_ASPECT, Math.max(1 / MAX_ASPECT, W / H));
+    const nx = asp >= 1 ? Math.round(N_PIX * asp) : N_PIX, ny = asp >= 1 ? N_PIX : Math.round(N_PIX / asp);
+    if (nx !== this.nx || ny !== this.ny) {
+      this.nx = nx;
+      this.ny = ny;
+      this.target.resize(nx, ny);
+      gl.bindTexture(gl.TEXTURE_2D, this.target.tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    }
+    const fx = asp >= 1 ? p.imgFov * asp : p.imgFov, fy = asp >= 1 ? p.imgFov : p.imgFov / asp;
     const { data, n } = this.coefficients();
     this.nCoef = n;
     this.coefTex.upload(data, Math.max(1, n));
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.target.fbo);
-    gl.viewport(0, 0, N_PIX, N_PIX);
+    gl.viewport(0, 0, nx, ny);
     gl.useProgram(this.synth);
     this.coefTex.bind(0, this.u1('uC'));
     gl.uniform1i(this.u1('uN'), n);
-    gl.uniform1f(this.u1('uFov'), p.imgFov);
+    gl.uniform2f(this.u1('uFov'), fx, fy);
     gl.bindVertexArray(this.vao1);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     if (p.imgAuto || this.range[1] <= this.range[0]) {
-      gl.readPixels(0, 0, N_PIX, N_PIX, gl.RGBA, gl.FLOAT, this.readBuf);
+      gl.readPixels(0, 0, nx, ny, gl.RGBA, gl.FLOAT, this.readBuf);
       let lo = Infinity, hi = -Infinity;
-      for (let i = 0; i < this.readBuf.length; i += 4) {
+      for (let i = 0, m = 4 * nx * ny; i < m; i += 4) {
         const v = this.readBuf[i];
         if (v < lo) lo = v;
         if (v > hi) hi = v;
@@ -145,7 +166,7 @@ export class ImageView {
       this.range = hi > lo ? [lo, hi] : [lo - 1e-3, lo + 1e-3];
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    gl.viewport(0, 0, W, H);
     gl.useProgram(this.show);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.target.tex);
@@ -158,13 +179,14 @@ export class ImageView {
     gl.bindVertexArray(null);
     this.drawOverlay();
     this.lastMs = performance.now() - t0;
+    this.msBy[this.mode] = this.lastMs;
   }
 
   private drawOverlay() {
     const p = this.store.p;
     const ctx = overlay2D(this.over);
     const r = this.over.getBoundingClientRect();
-    const sc = r.width / p.imgFov;
+    const sc = Math.min(r.width, r.height) / p.imgFov;
     const target = p.imgFov * 0.25;
     const nice = [1, 2, 5, 10, 20, 50].reduce((a, b) => (Math.abs(b - target) < Math.abs(a - target) ? b : a));
     ctx.fillStyle = '#fff';

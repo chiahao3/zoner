@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { Store } from '../ui/state';
 import { elementColor, displayRadius } from '../physics/elements';
+import { species } from '../physics/crystal';
 import { matVec, transpose, column, Vec3 } from '../ui/util';
 
 export class CrystalView {
@@ -157,10 +158,25 @@ export class CrystalView {
     }
   }
 
+  private legendKey = '';
+  /** Species legend (colour swatch, symbol, sites per cell) in the corner of the stage. */
+  private updateLegend() {
+    const s = this.store, p = s.p;
+    const box = this.canvas.parentElement?.querySelector<HTMLElement>('.legend');
+    const key = `${p.crystal}|${p.view3d}|${s.crystal.sites.length}`;
+    if (!box || key === this.legendKey) return;
+    this.legendKey = key;
+    const esc = (t: string) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+    box.innerHTML =
+      species(s.crystal).map((sp) => `<div><span class="sw" style="background:${elementColor(sp.el)}"></span>${esc(sp.el)}<span class="n">×${sp.n}</span></div>`).join('') +
+      `<div class="n">${p.view3d === 'slab' ? 'per cell · dim = outside MEP slice' : 'per cell'}</div>`;
+  }
+
   render() {
     const t0 = performance.now();
     this.dirty = false;
     const s = this.store, p = s.p;
+    this.updateLegend();
     const r = this.canvas.getBoundingClientRect();
     this.renderer.setSize(r.width, r.height, false);
     const R = s.R();

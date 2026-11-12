@@ -6,9 +6,10 @@ import { Store } from '../ui/state';
 import { compile, uniforms, FULLSCREEN_VS, fullscreenVAO, DataTexture, GLSL_FETCH, GLSL_COLORMAPS, COLORMAP_IDS, getGL, fitCanvas, cmapCSS } from './gl';
 import { stereoForward, stereoInverse } from '../physics/stereo';
 import { Mat3, Vec3, matVec, transpose, normalize, cross, overlay2D, fmt, DEG, cssVar } from '../ui/util';
-import { rotationAtoB } from '../physics/orientation';
+import { rotationAtoB, holderOutline, tiltToBring } from '../physics/orientation';
 import { dirIdx, Zone } from '../physics/zones';
-import { drawIdx } from './label';
+import { drawIdx, idxWidth } from './label';
+import { ringAngles, placeLabels } from '../ui/layout';
 import { zoneCutAngle, passWidth, resolution2D, TAU } from '../physics/transfer';
 
 const FS = `#version 300 es
@@ -19,7 +20,7 @@ uniform mat3 uRt, uMount;
 uniform float uEdge, uSPass, uDbest, uDworst;
 uniform vec2 uRes, uLim;
 uniform int uNZ, uCmap;
-uniform float uCosCut;
+uniform float uCosCut, uPx;
 uniform sampler2D uRefl, uZones;
 out vec4 o;
 ${GLSL_FETCH}
@@ -67,8 +68,11 @@ void main() {
   float a = asin(clamp(v.y, -1.0, 1.0));
   float b = atan(-v.x, v.z);
   if (uLim.x > 0.0 && (abs(a) > uLim.x || abs(b) > uLim.y)) {
-    float hatch = mod(gl_FragCoord.x + gl_FragCoord.y, 9.0) < 1.5 ? 0.25 : 0.55;
-    col *= hatch;
+    // beyond the holder range: dimmed, desaturated, red diagonal stripes every 10 css px
+    float lum = dot(col, vec3(0.3, 0.55, 0.15));
+    col = mix(col, vec3(lum), 0.6) * 0.35;
+    float s = mod((gl_FragCoord.x - gl_FragCoord.y) / uPx, 10.0);
+    col = mix(col, vec3(0.86, 0.24, 0.22), (s < 2.2 ? 0.8 : 0.0));
   }
   o = vec4(col, 1.0);
 }`;
@@ -91,6 +95,13 @@ export class StereoView {
   lastMs = 0;
   /** screen positions of drawn zone markers, for click-to-go */
   hits: { x: number; y: number; zone: Zone }[] = [];
+  /** tilt-ring angles (deg) drawn in the last frame */
+  rings: number[] = [];
+  /** zones labelled in the last frame (uvw), and the number of outline points drawn */
+  labelled: number[][] = [];
+  outlinePts = 0;
+  /** depth transfer that coloured the last frame (follows the image mode) */
+  source: 'sum' | 'slice' = 'sum';
   lowRes = false;
   private onZone = new Map<string, number>();
   private onZoneKey = '';
@@ -165,7 +176,8 @@ export class StereoView {
     gl.uniformMatrix3fv(u('uRt'), false, colMajor(transpose(R)));
     gl.uniformMatrix3fv(u('uMount'), false, colMajor(s.holder.mount));
     gl.uniform1f(u('uEdge'), this.edge());
-    const tp = s.transfer(p.mapSource);
+    const tp = s.transfer(p.imgMode);
+    this.source = p.imgMode;
     gl.uniform1f(u('uSPass'), passWidth(tp));
     const [db, dw] = this.dRange();
     gl.uniform1f(u('uDbest'), db);
@@ -174,6 +186,7 @@ export class StereoView {
     gl.uniform2f(u('uLim'), p.enforceLimits ? p.alphaLim * DEG : 0, p.betaLim * DEG);
     gl.uniform1i(u('uNZ'), this.nZones);
     gl.uniform1f(u('uCosCut'), Math.cos(zoneCutAngle(tp, dw)));
+    gl.uniform1f(u('uPx'), W / Math.max(1, this.canvas.getBoundingClientRect().width));
     this.zoneTex.bind(1, u('uZones'));
     gl.uniform1i(u('uCmap'), COLORMAP_IDS[p.mapCmap] ?? 2);
     this.tex.bind(0, u('uRefl'));
@@ -231,18 +244,54 @@ export class StereoView {
       }
     }
 
+    // tilt rings: total tilt from the current beam direction (radius tan(theta/2) on the map)
+    this.rings = [];
+    if (!training && p.mapRings) {
+      const h = Math.min(r.width, r.height) / 2;
+      const cornerP = (edge * Math.hypot(r.width, r.height)) / 2 / h;
+      const maxDeg = (2 * Math.atan(cornerP)) / DEG;
+      const cx = r.width / 2, cy = r.height / 2;
+      ctx.save();
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 5]);
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'left';
+      for (const a of ringAngles(p.mapRange, maxDeg)) {
+        const rad = (Math.tan((a * DEG) / 2) / edge) * h;
+        this.rings.push(a);
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad, 0, 2 * Math.PI);
+        ctx.stroke();
+        // label where the ring crosses the upper-right diagonal, or the right edge
+        let lx = cx + rad * Math.cos(Math.PI / 4), ly = cy - rad * Math.sin(Math.PI / 4);
+        if (lx > r.width - 28 || ly < 12) {
+          const dy = Math.sqrt(Math.max(0, rad * rad - (r.width / 2 - 30) ** 2));
+          lx = r.width - 30;
+          ly = cy - dy;
+          if (!(dy > 0) || ly < 12) continue;
+        }
+        ctx.fillStyle = '#fff';
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 3;
+        ctx.fillText(`${a}°`, lx + 2, ly - 2);
+        ctx.shadowBlur = 0;
+      }
+      ctx.restore();
+    }
+
     // zone axes
     this.hits = [];
-    const placed: [number, number][] = [];
+    const cands: { x: number; y: number; w: number; h: number; ix: number[]; uvw: number[]; imp: number }[] = [];
     ctx.font = '11px ui-monospace, monospace';
     ctx.textAlign = 'left';
     const zones = s.zones().filter((z) => Math.max(...z.uvw.map(Math.abs)) <= p.mapZoneIdx);
     const lenMin = zones.length ? zones[0].len : 1;
     // resolution reached *on* each zone (independent of orientation, cached per parameter set)
-    const tp = s.transfer(p.mapSource);
+    const tp = s.transfer(p.imgMode);
     const zs = s.zoneSet();
     const [db, dwst] = this.dRange();
-    const okey = `${p.crystal}|${p.dw}|${p.kV}|${p.lateralRes}|${p.mapSource}|${p.sliceThickness}|${p.depthRes}|${p.thickness}|${p.mapZoneIdx}`;
+    const okey = `${p.crystal}|${p.dw}|${p.kV}|${p.lateralRes}|${p.imgMode}|${p.sliceThickness}|${p.depthRes}|${p.thickness}|${p.mapZoneIdx}`;
     if (okey !== this.onZoneKey) {
       this.onZone.clear();
       this.onZoneKey = okey;
@@ -266,20 +315,60 @@ export class StereoView {
       const rad = 2 + 3.5 * imp;
       const dz = zoneD(z);
       ctx.fillStyle = Number.isFinite(dz) ? cmapCSS(p.mapCmap, (dwst - dz) / (dwst - db)) : 'rgba(150,150,150,0.9)';
-      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      let outOfRange = false;
+      if (p.enforceLimits) {
+        const t = tiltToBring(s.holder.mount, z.dir);
+        outOfRange = Math.abs(t.alpha) > p.alphaLim * DEG || Math.abs(t.beta) > p.betaLim * DEG;
+      }
+      ctx.strokeStyle = outOfRange ? '#ff5a52' : 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = outOfRange ? 2 : 1;
       ctx.beginPath();
       ctx.arc(x, y, rad, 0, 2 * Math.PI);
       ctx.fill();
       ctx.stroke();
       this.hits.push({ x, y, zone: z });
-      if (!training && imp > 0.3 && !placed.some(([a, b]) => Math.abs(a - x) < 34 && Math.abs(b - y) < 13)) {
-        placed.push([x, y]);
-        ctx.fillStyle = '#fff';
-        ctx.shadowColor = '#000';
-        ctx.shadowBlur = 3;
-        drawIdx(ctx, dirIdx(L, z.uvw), x + rad + 2, y - rad, { open: '[', close: ']' });
-        ctx.shadowBlur = 0;
+      if (!training) {
+        const ix = dirIdx(L, z.uvw);
+        cands.push({ x: x + rad + 2, y: y - rad - 10, w: idxWidth(ctx, ix, '[', ']'), h: 12, ix, uvw: z.uvw, imp });
       }
+    }
+    // labels for every zone within the index limit, lowest index first, skipping collisions
+    this.labelled = [];
+    const ok = placeLabels(cands, r.width, r.height);
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 3;
+    cands.forEach((c, i) => {
+      if (!ok[i]) return;
+      ctx.fillStyle = c.imp > 0.3 ? '#fff' : 'rgba(255,255,255,0.78)';
+      drawIdx(ctx, c.ix, c.x, c.y + 10, { open: '[', close: ']' });
+      this.labelled.push(c.uvw);
+    });
+    ctx.shadowBlur = 0;
+    // holder range outline: crystal directions on the beam at the edge of the alpha/beta range
+    this.outlinePts = 0;
+    if (p.enforceLimits && !training) {
+      const pts = holderOutline(s.holder.mount, p.alphaLim * DEG, p.betaLim * DEG, 64);
+      ctx.save();
+      ctx.strokeStyle = '#ff5a52';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = '#000';
+      ctx.shadowBlur = 2;
+      ctx.beginPath();
+      let pen = false;
+      for (const c of [...pts, pts[0]]) {
+        const d = matVec(R, c);
+        if (d[2] < 0.02) {
+          pen = false;
+          continue;
+        }
+        const [x, y] = this.fromP(stereoForward(d));
+        if (pen) ctx.lineTo(x, y);
+        else ctx.moveTo(x, y);
+        pen = true;
+        this.outlinePts++;
+      }
+      ctx.stroke();
+      ctx.restore();
     }
     // beam crosshair
     const cx = r.width / 2, cy = r.height / 2;
@@ -307,7 +396,15 @@ export class StereoView {
       ctx.textAlign = 'right';
       ctx.fillText(`${fmt(db, 2)} Å`, bx + bw, by - 3);
       ctx.textAlign = 'left';
-      ctx.fillText(`±${p.mapRange}°  ${p.mapSource === 'sum' ? 'depth sum' : 'MEP slice'}`, 8, r.height - 10);
+      ctx.fillText(`±${p.mapRange}°  ${p.imgMode === 'sum' ? 'depth sum' : 'MEP slice'}`, 8, r.height - 10);
+      if (p.enforceLimits) {
+        const t = `holder range α ±${p.alphaLim}° β ±${p.betaLim}°`;
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(4, r.height - 36, ctx.measureText(t).width + 8, 15);
+        ctx.fillStyle = '#ff7b74';
+        ctx.fillText(t, 8, r.height - 25);
+      }
       ctx.shadowBlur = 0;
     }
   }

@@ -30,7 +30,7 @@ export class Trainer {
   begin(level: Level) {
     const s = this.store;
     if (!this.active) {
-      this.saved = { kikuchi: s.p.kikuchi, dpLabels: s.p.dpLabels, dpIllum: s.p.dpIllum, dpTheory: s.p.dpTheory };
+      this.saved = { kikuchi: s.p.kikuchi, dpLabels: s.p.dpLabels, convAlpha: s.p.convAlpha, dpTheory: s.p.dpTheory };
       this.savedHolder = s.holder.clone();
     }
     this.active = true;
@@ -43,7 +43,7 @@ export class Trainer {
     const mount = matMul(rotZ(Math.random() * 2 * Math.PI), mountForZone(s.crystal.lattice, target.uvw));
     s.holder = new Holder(mount);
     s.p.kikuchi = L.kikuchi;
-    s.p.dpIllum = 'parallel';
+    s.p.convAlpha = 0; // parallel beam: spots + Kikuchi bands
     if (s.p.dpTheory === 'bloch') s.p.dpTheory = 'twobeam';
     // random offset that is not already near another candidate zone
     for (let tries = 0; tries < 50; tries++) {

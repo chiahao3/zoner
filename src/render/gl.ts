@@ -1,4 +1,5 @@
 // Thin WebGL2 helpers shared by the shader panels.
+import { canvasSize } from '../ui/layout';
 
 export function getGL(canvas: HTMLCanvasElement): WebGL2RenderingContext {
   const gl = canvas.getContext('webgl2', { antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: true });
@@ -131,8 +132,7 @@ export class FloatTarget {
 export function fitCanvas(c: HTMLCanvasElement, maxPx = 1024, scale = 1): [number, number] {
   const dpr = Math.min(window.devicePixelRatio || 1, 2) * scale;
   const r = c.getBoundingClientRect();
-  const w = Math.max(16, Math.min(maxPx, Math.round(r.width * dpr)));
-  const h = Math.max(16, Math.min(maxPx, Math.round(r.height * dpr)));
+  const [w, h] = canvasSize(r.width, r.height, dpr, maxPx);
   if (c.width !== w || c.height !== h) {
     c.width = w;
     c.height = h;

@@ -10,16 +10,16 @@ Related: [README.md](README.md) (use, physics summary, deploy).
 
 ---
 
-## 1. Start here (state at the end of session 1, 2026-11-11)
+## 1. Start here (state at the end of session 2, 2026-11-11: version 0.0.2)
 
 | item | state |
 |------|-------|
-| version | `0.1.0`, branch `feat/v1-app` (not merged; `main` holds only the scaffold commit). No remote yet |
+| version | `0.0.2` on `main` (tag `v0.0.2`, merged from `feat/session-2`; `v0.0.1` = session 1). No remote yet. History: [CHANGELOG.md](CHANGELOG.md) |
 | stack | Vite 7 + TypeScript 5.9 + three.js 0.187, raw WebGL2 shaders; static site, no backend |
 | installed | npm packages only, local to `node_modules/` (see `package.json`): three, vite, vitest 3, typescript 5, vite-plugin-singlefile, playwright-core (drives the system `/usr/bin/google-chrome`; no browser download), @types/three. No conda env was created. Node 20.20 (nvm) was already present |
-| tests | `npm test`: 29 vitest tests (physics core) pass in ~0.1 s |
-| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 12/12 interaction checks, timings + screenshots in `bench/out/` (gitignored) |
-| builds | `npm run build:pages` produces `dist/` (site) and `dist/zoner.html` (640 kB single file, verified offline from `file://`) |
+| tests | `npm test`: 57 vitest tests (29 physics, 28 UI helpers/state) |
+| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 30/30 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
+| builds | `npm run build:pages` produces `dist/` (site) and `dist/zoner.html` (~650 kB single file, runs from `file://`) |
 | deploy | `.github/workflows/pages.yml` (test, build, deploy on push to `main`). Needs a GitHub repo + Pages source "GitHub Actions" (§2) |
 
 Commands:
@@ -35,17 +35,18 @@ node bench/e2e.mjs --swiftshader    # software GL, slow-device worst case
 ## 2. Human checklist (for the user)
 
 - [ ] Create the GitHub repo and push (not done by Claude: pushing publishes). For example:
-      `gh repo create zoner --public --source . --remote origin && git push -u origin main feat/v1-app`,
-      then merge `feat/v1-app` into `main` when happy. Then Settings → Pages → Source: GitHub Actions.
-      Pages on a private repo needs a paid plan.
+      `gh repo create zoner --public --source . --remote origin && git push -u origin main --tags`.
+      Then Settings → Pages → Source: GitHub Actions. Pages on a private repo needs a paid plan.
 - [ ] Pick a license (package.json says `UNLICENSED` for now). three.js is MIT. The Lobato
       coefficients are published numbers (cited).
 - [ ] At the microscope: does the DP orientation and handedness match your camera? The app shows the
       pattern seen from the gun, with no camera rotation. A per-microscope rotation/flip setting is §3 P1.
 - [ ] Do the arrow-key senses feel natural (the pattern moves the way of the arrow)? Is the default
       step 0.2° right?
-- [ ] Do the defaults (300 kV, 20 mrad, 20 nm, Δz = 2 nm, depth 4.9 nm = λ/α², lateral 0.5 Å)
-      match your MEP conditions?
+- [ ] Do the defaults (300 kV, α = 3 mrad, 20 nm, Δz = 2 nm, depth 3 nm, lateral 0.5 Å) match
+      your MEP conditions?
+- [ ] Holder switch semantics: switching on keeps the orientation and relabels it with the stage
+      reading typed in (prefilled with the current α/β). Is that the workflow you meant?
 
 ## 3. Next actions (prioritized; each has "done when")
 
@@ -80,7 +81,7 @@ src/physics/        pure TS, unit-tested
   crystal.ts        Site/Crystal, built-ins, addUnique (periodic dedupe)
   cif.ts            tokenizer, loops, symops "x-y,z+1/2", atom sites, Uiso→B
   structure.ts      F_g, U_g, ξ_g, buildReflections (sorted by |g|, capped at 40k)
-  diffraction.ts    s_g, two-beam, kinematic
+  diffraction.ts    s_g, two-beam, kinematic, beamMode (auto parallel/CBED)
   bloch.ts          N-beam Bloch (real-symmetric embedding), beam selection
   eigen.ts          tred2/tql2
   orientation.ts    Holder (R = Rx(α) Ry(β) Mount), tiltToBring, mountForZone, rotationAtoB
@@ -89,15 +90,20 @@ src/physics/        pure TS, unit-tested
   stereo.ts         beam-centred stereographic projection
 src/render/         WebGL2 panels (each has dirty flag + render() + lastMs)
   gl.ts             program/texture/float-target helpers, GLSL + JS colormaps
-  dpView.ts         instanced spots/disks → float FBO; composite with Kikuchi bands + tone map
-  imageView.ts      Fourier synthesis → float FBO → readback min/max → colormap
-  stereoView.ts     per-pixel zone-based resolution metric + 2D overlay (markers, traces, legend)
-  crystalView.ts    three.js slab/cluster, orthographic camera, HTML labels
+  dpView.ts         instanced spots/disks → float FBO; composite with Kikuchi bands + tone map;
+                    spots vs CBED disks from beamMode (single α, zoom-aware)
+  imageView.ts      Fourier synthesis → float FBO (panel aspect) → readback min/max → colormap;
+                    one view, mode = Params.imgMode (sum | slice)
+  stereoView.ts     per-pixel zone-based resolution metric + 2D overlay (markers, traces, tilt rings,
+                    colour bar)
+  crystalView.ts    three.js slab/cluster, orthographic camera, HTML labels, species legend
   label.ts          canvas index labels with overbars
-src/ui/             state.ts (Store, Params, derived caches), controls.ts (schema → sidebar),
+src/ui/             layout.ts (canvasSize, tilt-ring spacing; pure, tested),
+                    state.ts (Store, Params, derived caches), controls.ts (schema → sidebar),
                     input.ts (pointer), training.ts, hash.ts (URL state), util.ts
-src/main.ts         layout, event wiring, info panel, persistence, render loop (adaptive throttling)
-bench/e2e.mjs       headless Chrome: smoke, interaction checks, timings, screenshots
+src/main.ts         2×2 layout + rail, event wiring, map hover readout, info panel, persistence,
+                    render loop (adaptive throttling)
+bench/e2e.mjs       headless Chrome: smoke, 23 checks, timings, screenshots (-> ~/scratch/zoner-bench)
 ```
 
 ## 5. Design decisions (and why)
@@ -136,6 +142,45 @@ bench/e2e.mjs       headless Chrome: smoke, interaction checks, timings, screens
 - **Adaptive throttling**: while you drag, any panel slower than 30 ms is re-rendered at most every
   ~3 render times, so the DP stays responsive on software GL.
 
+- **Session 2 layout**: 2×2 grid sized to the window (CSS grid with two `minmax(0, 1fr)` rows,
+  panels `min-height: 0`, stages flex instead of a fixed aspect ratio). Every view already scaled by
+  min(width, height), so non-square stages only needed two fixes: the image synthesis grid now
+  follows the panel aspect (imgFov spans the shorter side), and `fitCanvas` scales both sides
+  together when capped. The orientation info went to a right rail rather than the settings
+  sidebar because its α/β "go" table is read constantly at the microscope; ⓘ hides it.
+- **Single convergence angle, automatic illumination**: `beamMode` draws disks once their radius
+  exceeds 2σ of the spot blur (in device px), else spots. So the decision depends on zoom, which
+  matches what the eye sees: a 0.5 mrad disk is a spot at 2.2 Å⁻¹ half-width but a disk at
+  0.1 Å⁻¹. Training forces α = 0. The √/log auto display switches on real overlap (2r > g_min);
+  the old 0.9·g_min flattened the default 3 mrad Si [110] pattern, whose disks nearly touch.
+- **Holder range switch** (session 2b, user request): off by default so the simulated tilt can go
+  anywhere while matching an observed pattern. Switching on calls `Store.engageHolder(α, β)`:
+  M' = (Rx(α)Ry(β))ᵀ·R keeps the crystal orientation and makes the readout equal the stage reading;
+  only an explicitly typed reading outside the range is refused. With nothing typed (third round:
+  "activate whenever"), the reading is `defaultStageReading()`: the current α/β if inside the range
+  (switching on then only enables the limits), else 0, 0, so a pattern matched far outside the range
+  can still be engaged. Re-engaging while on re-anchors. Shortcut L. Assumes the simulated holder axes match the
+  real ones (camera rotation/flip is §3 P1).
+- **Map follows the image** (session 2b, user request): one `imgMode` for both. With the default
+  depth sum through 20 nm the map's bright regions are small (tilt tolerance ≈ lateral/t ≈ 0.15°);
+  that is correct and is the reason MEP slices help.
+- **Holder range on the map** (fourth round): the old hatch (×0.25/×0.55) vanished over the grey
+  "not atomic" background. Now the out-of-range region is desaturated and dimmed with red stripes
+  every 10 CSS px (uPx scales device px), and the overlay draws the reachable-region outline from
+  `holderOutline()` (beam directions along the α/β rectangle edge, tested by round trip through
+  `tiltToBring`). Out-of-range zone markers get a red ring.
+- **Zone labels** (fourth round): `placeLabels()` greedy, lowest index first, real text widths
+  (`idxWidth`), no index-based cut. Si [110] at ±30°: 27 labels at index ≤ 3, 88 at ≤ 5.
+- **Resolution colour scale capped at 1.5 Å** (user request: coarser is not atomic resolution).
+  `dRange()` = [lateral, max(1.5, 1.25·lateral)]; the same value is the metric's dWorst, so the
+  map, the zone markers and the orientation readout ("> 1.5 Å") agree, and zoneCutAngle prunes
+  more zones (slightly faster map).
+- **Tilt rings** (off by default since session 2b; hover gives the same number) measure the total tilt angle from the current beam (circles of radius tan(θ/2) on
+  the beam-centred map), not |Δα|/|Δβ|, which are not concentric. The hover readout gives the
+  holder α/β for any point, and the "go" table gives them for zones.
+- **Links carry `v=2`.** Links without it are from 0.0.1; their `convAlpha` was the imaging
+  aperture, so it is dropped and `dpIllum/dpAlpha` become the new α (unit-tested).
+
 ## 6. Principles
 
 - Physics changes are test-first in `tests/physics.test.ts`. UI conventions are checked in
@@ -155,6 +200,10 @@ bench/e2e.mjs       headless Chrome: smoke, interaction checks, timings, screens
   page errors when the first render times out.
 - Headless GPU: `--use-angle=vulkan --enable-features=Vulkan --ignore-gpu-blocklist` gives the real
   NVIDIA renderer. Without these flags you get SwiftShader.
+- The repo sits on an sshfs mount (`/home/cl2696/altas`). Keep benchmark output and throwaway
+  worktrees on local NVMe (`~/scratch`); `node_modules` can be symlinked into a worktree.
+- `FloatTarget.resize` resets texture filtering to NEAREST; set LINEAR again after resizing when the
+  target is sampled for display (image view).
 - STO 100 is weak for electrons (f_Sr − f_Ti − f_O ≈ 0.09 Å), so the "allowed" flag
   (|F| > 2% of the in-phase sum) marks it as not significant. This is real physics, not a bug.
 
@@ -186,20 +235,50 @@ Median render time per panel (ms), 1600×1000 window, each re-render after a til
 Bloch (CPU, JS): N = 41: 7 ms; 61: 12 ms; 101: 24–30 ms; 151: 80–150 ms. The first call includes
 ~70 ms of JIT warm-up.
 
+### Session 2: before/after, same machine, 1600×1000 window
+
+Both measured in this session with each version's own `bench/e2e.mjs` (v0.0.1 built from a
+worktree of the tag). Median ms per re-render after a tilt. Session 2 panels are larger (2×2
+instead of 3 columns), and only one image panel renders per frame (v0.0.1 rendered both).
+
+| scene | renderer | DP | map | depth sum | MEP slice | 3D |
+|---|---|---|---|---|---|---|
+| Si [110] two-beam, v0.0.1 (SAED) | RTX 5000 | 2.3 | 2.1 | 3.2 | 3.0 | 6.1 |
+| Si [110] two-beam, session 2, α = 0 | RTX 5000 | 2.5 | 2.8 | 2.7 | 3.1 | 5.9 |
+| Si [110] two-beam, session 2, default α = 3 mrad (CBED) | RTX 5000 | 2.6 | 2.6 | 3.2 | 3.8 | 6.6 |
+| Si CBED 20 mrad, v0.0.1 / session 2 | RTX 5000 | 2.5 / 2.4 | 2.1 / 2.7 | 2.4 / 2.7 | 3.1 / 3.3 | 5.0 / 7.0 |
+| Si [110] two-beam, v0.0.1 (SAED) | SwiftShader | 31.8 | 90.1 | 20.9 | 9.0 | 218 |
+| Si [110] two-beam, session 2, α = 0 | SwiftShader | 38.1 | 107 | 22.0 | 6.4 | 128 |
+| Si [110] two-beam, session 2, default 3 mrad | SwiftShader | 29.6 | 105 | 23.2 | 10.7 | 223 |
+| Si CBED 20 mrad, v0.0.1 / session 2 | SwiftShader | 126 / 118 | 94 / 107 | 19 / 23 | 5.5 / 5.4 | 129 / 123 |
+
+GPU: no change beyond noise. SwiftShader: the map is ~15% slower (bigger panel, same 640 px cap) and
+the DP slightly slower at α = 0. Per tilt frame, the total drops because one image panel replaces
+two. The 3D numbers on SwiftShader swing 120–220 ms between runs (first-render geometry
+rebuilds), so they are not comparable row to row.
+
 ## 9. Compatibility matrix
 
-| feature \ setting | parallel (SAED) | convergent (CBED) | hexagonal | CIF upload | big cell (Ω ≳ 2000 Å³) | phone |
+Session 2: "parallel" means α = 0 or disks smaller than the spot size; "convergent" means
+disks drawn (α > 0 and big enough at the current zoom).
+
+| feature \ setting | parallel (α = 0) | convergent (auto CBED) | hexagonal | CIF upload | big cell (Ω ≳ 2000 Å³) | phone |
 |---|---|---|---|---|---|---|
 | kinematic / two-beam DP | works | works (per-pixel rocking) | works (4-index labels) | works | works; reflections capped at 40k (g_max lowered) | works |
 | Bloch DP | works (idle-time) | partial: disks uniformly filled (no rocking) | works (complex U via embedding) | works | slow above ~150 beams | works |
 | Kikuchi bands | works | works | works | works | works (64 strongest planes) | works |
-| resolution map | n/a | n/a | works (index ≤ setting in 3-index) | works | slower (more ZOLZ reflections) | works |
-| images | n/a | n/a | works | works | coefficients capped at 4096 | works |
-| training | works (forced) | n/a | works | works | works | works (touch drag; no keys) |
+| resolution map (follows image mode) + rings + hover | n/a | n/a | works (index ≤ setting in 3-index) | works | slower (more ZOLZ reflections) | works (rings; no hover on touch) |
+| real-space image (sum / slice toggle) | n/a | n/a | works | works | coefficients capped at 4096 | works |
+| 3D legend | n/a | n/a | works | works (any element; unknown colour falls back to pink) | works | works |
+| 2×2 fit-to-window layout | n/a | n/a | n/a | n/a | n/a | n/a: phones (< 900 px) stack and scroll by design |
+| holder range switch | works | works | works | works | works | works |
+| training | works (forced α = 0) | n/a | works | works | works | works (touch drag; no keys) |
 | CIF without symops | n/a | n/a | n/a | treated as P1, with a toast warning | n/a | n/a |
 | offline single file | works | works | works | works | works | works |
+| 0.0.1 links / saved state | migrated (v=2 marker) | migrated (dpAlpha → α) | n/a | n/a | n/a | n/a |
 
-Untested: Safari/iOS WebGL2 (should work, since WebGL2 + EXT_color_buffer_float are standard);
+Layout verified without scrolling at 1920×1080, 1600×1000, 1366×768 and 1280×720 (e2e). Untested:
+windows shorter than ~650 px on desktop (panels get small but still fit), Safari/iOS WebGL2 (should work, since WebGL2 + EXT_color_buffer_float are standard);
 real microscope camera orientations (§2).
 
 ## 10. Session log
@@ -216,3 +295,26 @@ real microscope camera orientations (§2).
     symmetry, training, CIF upload, link round trip). Single-file offline build verified from
     `file://`. GitHub Pages workflow added.
   - Open: §2 checklist (repo creation/push, license, camera orientation), §3 P1 items.
+- **2026-11-11, session 2.** Requested: changelog + 0.0.1, merge, then UI changes.
+  - CHANGELOG.md added; version set to 0.0.1; `feat/v1-app` merged into `main` (`--no-ff`), tagged
+    `v0.0.1`. Session 2 on `feat/session-2`.
+  - Test-first `tests/ui.test.ts` (15 tests): `beamMode`, ring spacing, `canvasSize`, `species`,
+    0.0.1-link migration.
+  - One convergence angle (default 3 mrad) with automatic parallel/CBED; 2×2 fit-to-window layout
+    with the orientation rail; one real-space image panel (depth sum default, toggle to MEP slice);
+    tilt rings + hover α/β readout on the stereogram; 3D species legend; clearer holder ranges.
+  - Bugs found on the way: `fitCanvas` stretched capped non-square canvases; the CBED display
+    picked log for nearly-touching disks; the 3D legend showed over the training veil; panels
+    collapsed onto each other on phones. All fixed with e2e checks.
+  - Benchmarks: v0.0.1 vs session 2 on the same machine (§8). 23/23 e2e checks on GPU and
+    SwiftShader, 0 console errors.
+  - Second round (user feedback): rings toggle (off), λ/2α and λ/α² buttons removed (defaults 0.5 Å /
+    3 nm), stereogram follows the image toggle, holder range switch with engage-at-stage-reading.
+    Fixed arrow keys being swallowed by a focused checkbox. 50 unit tests, 26/26 e2e on GPU and
+    SwiftShader; timings unchanged.
+  - Third round: resolution colour scale capped at 1.5 Å (readout agrees); holder switch engages at
+    any time (default reading current α/β inside the range, else 0, 0; re-anchors; L shortcut).
+    54 unit tests, 28/28 e2e on GPU and SwiftShader.
+  - Fourth round: clearer holder range on the map (outline, red stripes, red-ringed markers);
+    zone labels follow the index limit. 57 unit tests, 30/30 e2e on GPU and SwiftShader.
+  - Marked 0.0.2, merged `feat/session-2` into `main` (`--no-ff`), tagged `v0.0.2`.

@@ -5,6 +5,64 @@ versions follow [SemVer](https://semver.org/) (0.0.x while the UI is still movin
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-11-11
+
+Session 2 (merged from `feat/session-2`).
+
+### Changed
+- Workspace is a 2×2 grid that always fits the window (no page scroll on desktop): diffraction
+  space on the left (DP over stereogram), real space on the right (crystal model over image). The
+  orientation panel moved to a collapsible right rail (ⓘ). Phones still stack one column.
+- Depth sum and MEP slice share one **Real-space image** panel with a toggle; depth sum is the
+  default. The slice-depth slider sits in the panel header in slice mode.
+- One **convergence angle** for everything (default 3 mrad). Parallel vs CBED is automatic: α = 0
+  is parallel; disks are drawn as CBED once larger than the spot size. The DP names the mode.
+  The separate illumination switch and DP convergence entry are gone.
+- Holder limits are labelled "α/β range ±" and the orientation panel spells out the symmetric
+  range (α −35° … +35°).
+- CBED display uses √ scaling unless the disks really overlap.
+- e2e output goes to `~/scratch/zoner-bench` (local disk) by default.
+
+### Added
+- Stereogram: dashed rings of total tilt from the current orientation, labelled in degrees, and a
+  hover readout of the tilt and the α/β needed for the direction under the pointer.
+- Crystal model: legend of each atomic species (colour, symbol, sites per cell).
+- Links carry `v=2`; links from 0.0.1 are migrated (DP convergence → the single angle).
+- Tests: `tests/ui.test.ts` (auto illumination, ring spacing, canvas sizing, species legend, link
+  migration); e2e grew from 12 to 23 checks (layout fit at four window sizes, image toggle, legend,
+  illumination, rings, hover, phone stacking), then 26 (rings toggle, map follows the image, holder
+  switch).
+
+### Changed (session 2, second round)
+- Tilt rings are off by default (the hover readout gives the same number); **Rings** button in the
+  stereogram header.
+- The λ/2α and λ/α² estimate buttons are gone. Defaults: lateral resolution 0.5 Å, depth
+  resolution 3 nm (was 4.9 nm).
+- The stereogram colouring follows the image toggle (depth sum or MEP slice); the separate map
+  source setting is gone. Default is depth sum for both.
+- Holder range is a switch in the orientation panel, off by default. Switching on takes the
+  current orientation as the stage α/β reading (prefilled, editable) and then enforces the range and
+  hatches the map.
+
+### Changed (session 2, third round)
+- Resolution colour scale runs from the lateral resolution to 1.5 Å; anything coarser is not atomic
+  resolution, so it is grey on the map and reads "> 1.5 Å" in the orientation panel (was 2.5 Å).
+- The holder range switch engages at any time. With no reading typed, the stage reading is the
+  current α/β if inside the range, otherwise 0, 0 (the orientation is always kept). Re-engaging
+  re-anchors. New shortcut **L** toggles it, also with the orientation panel hidden.
+
+### Changed (session 2, fourth round)
+- Holder range on the stereogram is clearer: a solid red outline of the reachable region, the
+  region beyond it dimmed with red diagonal stripes (fixed on-screen spacing), zone markers beyond
+  it ringed in red, and a caption with the range.
+- Stereogram zone labels follow the zone-index limit: every zone within the limit gets a label
+  unless it would collide with a lower-index one (was: only the few lowest-index zones).
+
+### Fixed
+- Arrow keys stopped working after clicking a checkbox.
+- Canvases capped at their maximum backing size kept the cap per side, which stretched non-square
+  panels; both sides now scale together.
+
 ## [0.0.1] - 2026-11-11
 
 First working version (session 1).

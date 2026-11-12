@@ -13,7 +13,6 @@ interface Ctl {
   unit?: string;
   options?: Opt[];
   title?: string;
-  auto?: { label: string; fn: (s: Store) => number; title: string };
 }
 interface Group {
   name: string;
@@ -29,7 +28,7 @@ export const GROUPS: Group[] = [
     ctls: [
       { key: 'kV', label: 'High tension', type: 'select', unit: 'kV', options: ['60', '80', '120', '200', '300'] },
       { key: 'thickness', label: 'Thickness t', type: 'number', min: 0.5, max: 500, step: 0.5, unit: 'nm' },
-      { key: 'convAlpha', label: 'Convergence α', type: 'number', min: 0.5, max: 60, step: 0.5, unit: 'mrad', title: 'Probe semi-angle used for the MEP resolution estimates (and the DP if set below)' },
+      { key: 'convAlpha', label: 'Convergence α', type: 'number', min: 0, max: 60, step: 0.5, unit: 'mrad', title: 'Probe semi-angle. 0 = parallel beam (SAED spots). Disks are drawn as CBED once they are larger than the spot size, otherwise as spots. ' },
       { key: 'dw', label: 'Debye-Waller B', type: 'number', min: 0, max: 3, step: 0.05, unit: 'Å²' },
     ],
   },
@@ -39,12 +38,10 @@ export const GROUPS: Group[] = [
       {
         key: 'lateralRes', label: 'Lateral resolution', type: 'number', min: 0.1, max: 5, step: 0.05, unit: 'Å',
         title: 'FWHM of the lateral PSF; also the |g| cut-off of the resolution map',
-        auto: { label: 'λ/2α', fn: (s) => +(s.lambda / (2 * s.p.convAlpha * 1e-3)).toFixed(2), title: 'aperture-limited estimate λ/(2α)' },
       },
       {
         key: 'depthRes', label: 'Depth resolution', type: 'number', min: 0, max: 100, step: 0.1, unit: 'nm',
         title: 'FWHM of the depth PSF of a reconstructed slice',
-        auto: { label: 'λ/α²', fn: (s) => +((s.lambda / (s.p.convAlpha * 1e-3) ** 2) / 10).toFixed(1), title: 'aperture-limited estimate λ/α²' },
       },
       { key: 'sliceThickness', label: 'Slice thickness Δz', type: 'number', min: 0.1, max: 100, step: 0.1, unit: 'nm' },
       { key: 'sliceDepth', label: 'Slice depth z', type: 'range', min: 0, max: 20, step: 0.1, unit: 'nm', title: 'centre of the displayed MEP slice below the entrance surface' },
@@ -57,8 +54,6 @@ export const GROUPS: Group[] = [
     name: 'Diffraction',
     open: true,
     ctls: [
-      { key: 'dpIllum', label: 'Illumination', type: 'select', options: [['parallel', 'parallel (SAED)'], ['convergent', 'convergent (CBED)']] },
-      { key: 'dpAlpha', label: 'DP convergence', type: 'number', min: 0.2, max: 40, step: 0.1, unit: 'mrad' },
       { key: 'dpTheory', label: 'Theory', type: 'select', options: [['kinematic', 'kinematic'], ['twobeam', 'two-beam per g (dynamical)'], ['bloch', 'Bloch wave, N beams']] },
       { key: 'blochBeams', label: 'Bloch beams N', type: 'number', min: 5, max: 201, step: 1 },
       { key: 'kikuchi', label: 'Kikuchi bands', type: 'range', min: 0, max: 1, step: 0.05 },
@@ -73,10 +68,11 @@ export const GROUPS: Group[] = [
   {
     name: 'Resolution map',
     ctls: [
-      { key: 'mapSource', label: 'Colour by', type: 'select', options: [['slice', 'MEP slice'], ['sum', 'depth sum']] },
+      { key: 'imgMode', label: 'Colour by', type: 'select', options: [['sum', 'depth sum'], ['slice', 'MEP slice']], title: 'Same setting as the real-space image toggle: the map is coloured by the resolution of the image you are looking at' },
       { key: 'mapRange', label: 'Map half-range', type: 'select', unit: '°', options: ['3', '5', '10', '20', '30', '45', '60', '90'] },
       { key: 'mapZoneIdx', label: 'Zone index ≤', type: 'number', min: 1, max: 8, step: 1 },
       { key: 'mapTraces', label: 'Plane traces', type: 'check' },
+      { key: 'mapRings', label: 'Tilt rings', type: 'check', title: 'dashed rings of total tilt from the current beam (hovering the map gives the same number)' },
       { key: 'mapCmap', label: 'Map colormap', type: 'select', options: ['viridis', 'turbo', 'inferno', 'magma'] },
     ],
   },
@@ -91,9 +87,8 @@ export const GROUPS: Group[] = [
   {
     name: 'Holder',
     ctls: [
-      { key: 'alphaLim', label: 'α limit', type: 'number', min: 1, max: 90, step: 1, unit: '°' },
-      { key: 'betaLim', label: 'β limit', type: 'number', min: 1, max: 90, step: 1, unit: '°' },
-      { key: 'enforceLimits', label: 'Enforce limits', type: 'check' },
+      { key: 'alphaLim', label: 'α range ±', type: 'number', min: 1, max: 90, step: 1, unit: '°', title: 'Symmetric limit: α can go from −value to +value (35 means −35° … +35°, 70° of travel)' },
+      { key: 'betaLim', label: 'β range ±', type: 'number', min: 1, max: 90, step: 1, unit: '°', title: 'Symmetric limit: β can go from −value to +value (30 means −30° … +30°, 60° of travel)' },
       { key: 'step', label: 'Arrow-key step', type: 'number', min: 0.01, max: 5, step: 0.01, unit: '°' },
     ],
   },
@@ -154,11 +149,6 @@ export class Controls {
       const out = el('span', { class: 'unit' });
       this.outs.set(c.key, out);
       wrap.append(out);
-    }
-    if (c.auto) {
-      const b = el('button', { class: 'mini', text: c.auto.label, title: c.auto.title });
-      b.addEventListener('click', () => s.set(c.key, c.auto!.fn(s) as never));
-      wrap.append(b);
     }
     row.append(wrap);
     if (c.unit) row.dataset.unit = c.unit;

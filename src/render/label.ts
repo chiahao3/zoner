@@ -1,4 +1,11 @@
 // Crystallographic index labels on a 2D canvas, with overbars for negative indices.
+
+/** Width (px) drawIdx would use for this label with the current ctx.font. */
+export function idxWidth(ctx: CanvasRenderingContext2D, ix: number[], open = '', close = ''): number {
+  const sep = ix.every((v) => Math.abs(v) < 10) ? '' : ' ';
+  const t = open + ix.map((v) => String(Math.abs(v))).join(sep) + close;
+  return ctx.measureText(t).width;
+}
 export function drawIdx(
   ctx: CanvasRenderingContext2D, ix: number[], x: number, y: number,
   opts: { open?: string; close?: string; align?: 'left' | 'center' } = {},
