@@ -579,6 +579,34 @@ const lb3 = await pf.evaluate(() => ({ p: window.zoner.store.p.lateralRes, on: d
 check('λ/β checkbox fills the lateral resolution (90 mrad: 0.219 Å, 60 mrad: 0.328 Å); typing a value unchecks it',
   lb1.v === 0.219 && lb1.p === 0.219 && lb2.p === 0.328 && lb2.on && lb3.p === 0.5 && !lb3.on, { lb1, lb2, lb3 });
 await pf.evaluate(() => window.zoner.store.set('collAngle', 90));
+// global display range: the reference zone's phase range, per image mode; auto contrast off by default
+const gr = await pf.evaluate(() => {
+  const z = window.zoner, s = z.store;
+  s.loadCrystal('Si'); s.set('lateralRes', 0.5); s.set('thickness', 20); s.set('sliceDepth', 10);
+  const at = (mode, deg) => { s.p.imgMode = mode; s.setTilt(deg * Math.PI / 180, 0.4 * deg * Math.PI / 180); z.img.render();
+    return { range: z.img.range.slice(), own: z.img.imgRange.slice(), zone: z.img.refZone }; };
+  const r = { auto: s.p.imgAuto, sum0: at('sum', 0), sum3: at('sum', 3), slice0: at('slice', 0), slice3: at('slice', 3) };
+  s.p.imgMode = 'sum'; s.setTilt(0, 0);
+  return r;
+});
+const sp = (x) => x[1] - x[0];
+check('global display range (auto contrast off by default): on [110] it is the image\'s own range; 3° off the image keeps < 20% (sum) of it; slice has its own range',
+  gr.auto === false && gr.sum0.zone === '[110]' && Math.abs(sp(gr.sum0.own) / sp(gr.sum0.range) - 1) < 0.03 && Math.abs(sp(gr.slice0.own) / sp(gr.slice0.range) - 1) < 0.03
+  && sp(gr.sum3.range) === sp(gr.sum0.range) && sp(gr.sum3.own) < 0.2 * sp(gr.sum3.range) && sp(gr.slice3.own) < 0.6 * sp(gr.slice3.range)
+  && Math.abs(sp(gr.slice0.range) / sp(gr.sum0.range) - 1) > 0.2, gr);
+for (const [im, deg] of [['sum', 0], ['sum', 1], ['sum', 3], ['slice', 0], ['slice', 3]]) {
+  await pf.evaluate(({ im, deg }) => { const z = window.zoner, s = z.store; s.set('imgMode', im); s.setTilt(deg * Math.PI / 180, 0.4 * deg * Math.PI / 180); z.markAll(); }, { im, deg });
+  await pf.waitForTimeout(300);
+  await pf.locator('#panel-img').screenshot({ path: join(out, `global-${im}-${deg}deg-${mode}.png`) });
+}
+await pf.evaluate(() => { document.getElementById('ctl-imgAuto').closest('details').open = true; });
+await pf.locator('#ctl-imgAuto').check();
+await pf.waitForTimeout(300);
+const ga = await pf.evaluate(() => ({ auto: window.zoner.store.p.imgAuto, range: window.zoner.img.range.slice(), own: window.zoner.img.imgRange.slice() }));
+check('Auto contrast checkbox: back to stretching each image to its own range',
+  ga.auto && Math.abs(sp(ga.range) - sp(ga.own)) < 1e-9, ga);
+await pf.locator('#ctl-imgAuto').uncheck();
+await pf.evaluate(() => { const s = window.zoner.store; s.set('imgMode', 'sum'); s.setTilt(0, 0); window.zoner.markAll(); });
 await fresh.close();
 
 // mobile layout
