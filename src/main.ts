@@ -456,7 +456,8 @@ function renderInfo() {
   const rt = resolution2D(R, bc, s.transfer('sum'), zs, TAU, dW);
   const th = near[0]?.angle ?? 0;
   // effective depth length of the slice (A -> nm): 1 / pass width, = depth FWHM deep inside, <= t
-  const dzEff = 1 / passWidth(s.transfer('slice')) / 10;
+  const pw = passWidth(s.transfer('slice'));
+  const dzEff = pw > 1e-6 ? 1 / pw / 10 : NaN; // NaN: the slice lies outside the specimen
   const fmtD = (r: { d: number; zone: Vec3 | null }) => (Number.isFinite(r.d) && r.d <= dW ? `${fmt(r.d, 2)} Å <span class="muted">(${htmlDir(L, r.zone!)})</span>` : `&gt; ${fmt(dW, 1)} Å`);
   info.innerHTML = `
     <div class="tiltrow"><span class="${lim(a, p.alphaLim)}">α <b>${fmt(a, 2)}°</b></span><span class="${lim(b, p.betaLim)}">β <b>${fmt(b, 2)}°</b></span>
@@ -471,7 +472,7 @@ function renderInfo() {
     </tbody></table>
     <div class="kv"><span>2D resolution, MEP slice</span><b>${fmtD(rs)}</b></div>
     <div class="kv"><span>2D resolution, depth sum</span><b>${fmtD(rt)}</b></div>
-    <div class="kv"><span>column smear (nearest zone): slice / total</span><b>${fmt(dzEff * 10 * Math.tan(th), 2)} / ${fmt(p.thickness * 10 * Math.tan(th), 2)} Å</b></div>
+    <div class="kv"><span>column smear (nearest zone): slice / total</span><b>${Number.isFinite(dzEff) ? fmt(dzEff * 10 * Math.tan(th), 2) : '—'} / ${fmt(p.thickness * 10 * Math.tan(th), 2)} Å</b></div>
     <div class="kv muted"><span>λ = ${fmt(s.lambda * 100, 3)} pm · K = ${fmt(s.K, 2)} Å⁻¹ · ${R.n} reflections (|g| ≤ ${fmt(R.gmax, 2)} Å⁻¹)</span></div>
     <div class="kv muted"><span>${dp.blochStatus() || 'frame ms'}</span><span>DP ${fmt(dp.lastMs, 1)} · map ${fmt(map.lastMs, 1)} · image ${fmt(img.lastMs, 1)} · 3D ${fmt(r3d.lastMs, 1)}</span></div>`;
   info.querySelectorAll<HTMLButtonElement>('.go').forEach((bt) => (bt.onclick = () => animateToDir(near[+bt.dataset.i!].zone.dir)));
