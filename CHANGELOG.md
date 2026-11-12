@@ -5,6 +5,28 @@ versions follow [SemVer](https://semver.org/) (0.0.x while the UI is still movin
 
 ## [Unreleased]
 
+Session 3 (branch `feat/session-3`).
+
+### Fixed
+- MEP slice of a thin specimen: the slice weight is now the slice window blurred by the depth PSF
+  **and cut to the specimen [0, t]**, instead of a Gaussian depth PSF on an infinite slab. A
+  0.5 nm specimen in slice mode now tilts like 0.5 nm (smear-equivalent length 0.26 nm, was
+  1.67 nm = the PSF). Slices partly or fully outside the specimen lose that part of their weight
+  (fully outside: empty image). Slices deep inside a thick crystal are unchanged. The image, the
+  stereogram and the orientation readout share this depth transfer.
+- Orientation panel: the slice "column smear" uses the slice's effective depth length (1/pass
+  width), so it is never longer than the specimen; "—" when the slice lies outside it.
+
+### Added
+- **λ/α²** checkbox next to the depth resolution: fills it from the high tension and the
+  convergence angle and keeps it updated; typing a depth resolution unchecks it. α = 0 gives the
+  cap of 1000 nm (now also the control's maximum). Off by default (3 nm). Saved in links.
+
+### Internal
+- Image Fourier coefficients moved to `src/physics/image.ts` (pure, unit-tested).
+- `transfer.ts`: `depthWeight` / `depthFT` (exact transform of a piecewise-linear weight) replace
+  the closed-form slice transfer; a total-variation bound skips reflections that cannot pass.
+
 ## [0.0.2] - 2026-11-11
 
 Session 2 (merged from `feat/session-2`).

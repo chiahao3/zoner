@@ -10,15 +10,15 @@ Related: [README.md](README.md) (use, physics summary, deploy).
 
 ---
 
-## 1. Start here (state at the end of session 2, 2026-11-11: version 0.0.2)
+## 1. Start here (state at the end of session 3, 2026-11-12: `feat/session-3` on top of 0.0.2, not merged)
 
 | item | state |
 |------|-------|
-| version | `0.0.2` on `main` (tag `v0.0.2`, merged from `feat/session-2`; `v0.0.1` = session 1). No remote yet. History: [CHANGELOG.md](CHANGELOG.md) |
+| version | `0.0.2` on `main` (tag `v0.0.2`); session 3 work on `feat/session-3` (unmerged, CHANGELOG "Unreleased"). No remote yet. History: [CHANGELOG.md](CHANGELOG.md) |
 | stack | Vite 7 + TypeScript 5.9 + three.js 0.187, raw WebGL2 shaders; static site, no backend |
 | installed | npm packages only, local to `node_modules/` (see `package.json`): three, vite, vitest 3, typescript 5, vite-plugin-singlefile, playwright-core (drives the system `/usr/bin/google-chrome`; no browser download), @types/three. No conda env was created. Node 20.20 (nvm) was already present |
-| tests | `npm test`: 57 vitest tests (29 physics, 28 UI helpers/state) |
-| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 30/30 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
+| tests | `npm test`: 73 vitest tests (29 physics, 9 depth weight, 35 UI helpers/state) |
+| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 32/32 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
 | builds | `npm run build:pages` produces `dist/` (site) and `dist/zoner.html` (~650 kB single file, runs from `file://`) |
 | deploy | `.github/workflows/pages.yml` (test, build, deploy on push to `main`). Needs a GitHub repo + Pages source "GitHub Actions" (§2) |
 
@@ -65,8 +65,6 @@ node bench/e2e.mjs --swiftshader    # software GL, slow-device worst case
 - **P2 Absorption** (imaginary U'_g ≈ 0.1 U_g) for Bloch and two-beam, so thick-crystal contrast is
   less extreme.
 - **P2 Touch**: pinch zoom on the DP/map, larger touch targets for the "go" buttons.
-- **P2 MEP slice finite-thickness edges**: slices near the surfaces should see only crystal inside
-  [0, t]. The current synthesis assumes an infinite slab around the slice.
 - **P3 Missing-cone depth transfer** option (from α) instead of a Gaussian depth PSF.
 - **P3 Space-group tables** so CIFs with only a H-M symbol expand (now treated as P1, with a warning).
 
@@ -178,6 +176,33 @@ bench/e2e.mjs       headless Chrome: smoke, 23 checks, timings, screenshots (-> 
 - **Tilt rings** (off by default since session 2b; hover gives the same number) measure the total tilt angle from the current beam (circles of radius tan(θ/2) on
   the beam-centred map), not |Δα|/|Δβ|, which are not concentric. The hover readout gives the
   holder α/β for any point, and the "go" table gives them for zones.
+- **Finite-specimen slice weight** (session 3, user request: thin specimens stay sharp when
+  tilted). The slice weight is w(ζ) = box_t(ζ)·(box_Δz ⊛ G)(ζ − z0): the reconstruction is
+  (V·box_t) ⊛ G, integrated over the slice window. The old closed form Δz·sinc·exp(−2π²σ²g²)
+  ignored box_t. w is held as uniform piecewise-linear runs (5 nodes per σ inside ±4σ of each
+  blurred edge, one segment where it is flat) and transformed exactly per segment, so there is no
+  aliasing at any g_z; the interpolant damps by sinc²(g h) (≤ 0.25% of the area, tested against the
+  old formula deep inside a 400 nm crystal). One depth transfer feeds the image, passWidth (map,
+  readout) and the zone cache (its key now includes the slice depth). Normalisation: the slice
+  amplitude is ∫w, so a slice whose blur reaches beyond the specimen holds only its share of the
+  potential (total over all slices conserved); a 200 nm PSF on a 0.5 nm specimen gives the depth
+  sum's shape at ~1% of its amplitude (auto contrast hides the scale). Measured: t = 0.5 nm,
+  Δz = 2 nm, depth 3 nm: smear-equivalent length 0.26 nm (was 1.67 nm), = the depth sum's.
+- **λ/α² checkbox** (session 3): Store-level (`depthAuto`, `syncAutoDepth`), so links and the
+  sidebar agree; a typed depthRes unchecks it. α → 0 caps at 1000 nm instead of ∞. Training sets
+  α = 0 directly on `p`, so it does not disturb the depth setting.
+- **Off-zone residual fringes in the depth sum: investigated, not changed** (session 3; the user
+  dropped it: in MEP the dominant blur is within the slice, and mis-tilt mainly hurts ADF-STEM via
+  dechanneling). Findings for the record (Si [110], 20 nm, rms phase over 20 Å):
+  tilt 0/2/3/5/8° → 1.63/0.47/0.09/0.20/0.12 rad. The residuals are low-index reflections (111,
+  220) in the sinc sidelobes of the sharp-walled slab (T g_z = −1.5 at 5°), i.e. partial planes
+  cut by the surfaces; they are 5–12% of the on-zone phase, and auto contrast stretches them.
+  Envelopes at realistic values barely help (5°: 2 nm surface roughness → 0.16 rad, 0.25° mosaic
+  spread → 0.13 rad and −18% on zone). Random amorphous layers (1 nm/side ≈ 0.1 rad rms, matched
+  Campbell's theorem) did break up the 3° and 8° fringes in a GPU prototype, but cost ~15× image
+  time on SwiftShader; reverted. The prototype is archived in
+  `~/scratch/zoner-bench/session3/amorphous-attempt/` (not in git). Frozen-phonon displacement was
+  judged minor (DW B is already in F_g).
 - **Links carry `v=2`.** Links without it are from 0.0.1; their `convAlpha` was the imaging
   aperture, so it is dropped and `dpIllum/dpAlpha` become the new α (unit-tested).
 
@@ -257,6 +282,26 @@ the DP slightly slower at α = 0. Per tilt frame, the total drops because one im
 two. The 3D numbers on SwiftShader swing 120–220 ms between runs (first-render geometry
 rebuilds), so they are not comparable row to row.
 
+### Session 3: finite-specimen slice weight, same machine, 1600×1000 window
+
+Median ms per re-render after a tilt; `main` (v0.0.2) rebuilt in a scratch worktree and run with
+its own e2e in the same session. CPU coefficient time (node, Si, 24k reflections): depth sum
+1.26 → 0.98 ms, slice 1.19 → 1.16 ms, lateral 0.3 Å slice 2.00 → 1.99 ms (the bound skips more).
+
+| scene | renderer | DP | map | depth sum | MEP slice | 3D |
+|---|---|---|---|---|---|---|
+| Si [110] default, v0.0.2 / session 3 | RTX 5000 | 2.4 / 2.4 | 2.9 / 2.4 | 2.7 / 3.0 | 3.4 / 2.8 | 6.6 / 6.1 |
+| Si lateral 0.3 Å, v0.0.2 / session 3 | RTX 5000 | 3.8 / 4.3 | 2.8 / 2.4 | 3.4 / 3.5 | 4.1 / 3.6 | 5.8 / 5.2 |
+| Si thin 0.5 nm slice (new row) | RTX 5000 | 2.5 | 3.0 | 3.1 | 3.2 | 5.0 |
+| Si [110] default, v0.0.2 / session 3 | SwiftShader | 25.5 / 40.9 | 104 / 97 | 21.8 / 24.5 | 9.6 / 10.1 | 124 / 224 |
+| Si lateral 0.3 Å, v0.0.2 / session 3 | SwiftShader | 36.5 / 40.0 | 102 / 105 | 30.9 / 32.3 | 8.3 / 7.4 | 117 / 124 |
+| Si thin 0.5 nm slice (new row) | SwiftShader | 40 | 304 | 75 | 72 | 40 |
+
+No change beyond noise (SwiftShader DP and 3D swing run to run, as in session 2). The thin row is
+slower on SwiftShader because a 0.5 nm specimen passes many more reflections (wide depth
+transfer); the depth sum, whose formula did not change, costs the same, so it is the specimen,
+not the new weight.
+
 ## 9. Compatibility matrix
 
 Session 2: "parallel" means α = 0 or disks smaller than the spot size; "convergent" means
@@ -274,6 +319,8 @@ disks drawn (α > 0 and big enough at the current zoom).
 | holder range switch | works | works | works | works | works | works |
 | training | works (forced α = 0) | n/a | works | works | works | works (touch drag; no keys) |
 | CIF without symops | n/a | n/a | n/a | treated as P1, with a toast warning | n/a | n/a |
+| finite-specimen slice weight | works | works | works | works | works | works |
+| λ/α² auto depth | α = 0 → 1000 nm cap (slice ≈ depth sum) | works | works | works | works | works |
 | offline single file | works | works | works | works | works | works |
 | 0.0.1 links / saved state | migrated (v=2 marker) | migrated (dpAlpha → α) | n/a | n/a | n/a | n/a |
 
@@ -318,3 +365,13 @@ real microscope camera orientations (§2).
   - Fourth round: clearer holder range on the map (outline, red stripes, red-ringed markers);
     zone labels follow the index limit. 57 unit tests, 30/30 e2e on GPU and SwiftShader.
   - Marked 0.0.2, merged `feat/session-2` into `main` (`--no-ff`), tagged `v0.0.2`.
+- **2026-11-12, session 3** (`feat/session-3`). Requested: finite-specimen MEP slice, off-zone
+  periodicity in the depth sum, λ/α² checkbox.
+  - Image coefficients moved to `physics/image.ts`; new `tests/depth.test.ts` (9, test-first).
+  - Slice weight cut to the specimen (§5): thin specimens keep their tilt tolerance in slice mode;
+    deep slices unchanged; CPU cost equal or lower.
+  - λ/α² checkbox (7 tests, test-first; the session-2b "no estimate buttons" test narrowed to
+    λ/2α).
+  - Off-zone periodicity: numerical study (§5), amorphous-layer GPU prototype built and then
+    reverted at the user's request; nothing of it is in git.
+  - 73 unit tests; e2e 32/32 on GPU and SwiftShader, 0 console errors; timings vs v0.0.2 (§8).

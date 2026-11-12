@@ -37,8 +37,10 @@ long it takes you to get on zone.
 - The beam travels along −z. s_g = (K² − |k₀+g|²)/2K. Two-beam: I = sin²(πts_eff)/(ξs_eff)².
   Bloch: ψ(t) = exp(iπtA/K)e₀, using a real-symmetric embedding of the Hermitian A (JAMA
   tred2/tql2). There is no absorption.
-- Images use Fourier synthesis of V_g × lateral Gaussian × depth transfer (box × Gaussian for a slice,
-  box for the depth sum). This is exact for a perfect crystal slab.
+- Images use Fourier synthesis of V_g × lateral Gaussian × depth transfer. The depth transfer is the
+  Fourier transform of a depth weight: a box [0, t] for the depth sum; for a slice, the slice window
+  blurred by the Gaussian depth PSF and cut to the specimen (a thin specimen stays sharp when tilted;
+  a slice partly outside the specimen loses that part). This is exact for a perfect crystal slab.
 - Resolution metric: for each low-index zone, take the ZOLZ reflections with |g| ≤ 1/lateral and
   |g·n| inside the first lobe of the depth transfer, above exp(−π²/4ln2). The same threshold sets the
   lateral FWHM. The 2D resolution is the worst in-plane direction, 1/min_e max_g |g·e|, and the best
@@ -46,6 +48,9 @@ long it takes you to get on zone.
   (t·tanθ, or depth-FWHM·tanθ).
 
 Defaults for the MEP model: lateral resolution 0.5 Å, depth resolution 3 nm, slice thickness 2 nm.
+The **λ/α²** checkbox next to the depth resolution fills it from the high tension and the
+convergence angle and keeps it updated (300 kV: 3.15 nm at 25 mrad, 219 nm at 3 mrad); typing a
+value unchecks it.
 
 These are qualitative tools: feature positions and symmetry are right, and intensities are
 approximate.
@@ -57,9 +62,9 @@ Version history: [CHANGELOG.md](CHANGELOG.md).
 ```bash
 npm ci
 npm run dev          # http://localhost:5173
-npm test             # vitest: physics core + UI helpers (57 tests)
+npm test             # vitest: physics core + UI helpers (73 tests)
 npm run build:pages  # dist/ (+ dist/zoner.html)
-node bench/e2e.mjs --gpu          # headless Chrome: 30 checks, timings, screenshots -> ~/scratch/zoner-bench
+node bench/e2e.mjs --gpu          # headless Chrome: 32 checks, timings, screenshots -> ~/scratch/zoner-bench
 node bench/e2e.mjs --swiftshader  # same on software GL (slow-laptop worst case)
 ```
 
