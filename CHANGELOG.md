@@ -5,7 +5,13 @@ versions follow [SemVer](https://semver.org/) (0.0.x while the UI is still movin
 
 ## [Unreleased]
 
-Session 4 (branch `feat/session-4`, on top of session 3).
+## [0.0.4] - 2026-11-12
+
+Sessions 3 and 4 (merged from `feat/session-4`, which contains `feat/session-3`). There is no
+0.0.3 release. First public release on GitHub (https://github.com/chiahao3/zoner), served at
+https://chiahao3.github.io/zoner/.
+
+Session 4:
 
 ### Added
 - **Collection angle β** (mrad, default 64): the half-width of the square detector.
@@ -37,7 +43,7 @@ Session 4 (branch `feat/session-4`, on top of session 3).
 - **Auto contrast is off by default.** On, it stretches each image to its own range as before.
   Off now means the global range above (the old "locked = keep the current range" is gone).
 
-Session 3 (branch `feat/session-3`).
+Session 3:
 
 ### Fixed
 - MEP slice of a thin specimen: the slice weight is now the slice window blurred by the depth PSF

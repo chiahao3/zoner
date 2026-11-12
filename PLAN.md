@@ -4,23 +4,24 @@ Living plan for continuing work across sessions.
 
 - **Read §1 first** in a new session.
 - Keep §3 (next actions) prioritized.
-- Append to §10 (session log) whenever a chunk of work is committed.
+- Append to §11 (session log) whenever a chunk of work is committed. Releasing: §10.
 
 Related: [README.md](README.md) (use, physics summary, deploy).
 
 ---
 
-## 1. Start here (state at the end of session 4, 2026-11-12: `feat/session-4` on top of `feat/session-3` on top of 0.0.2, neither merged)
+## 1. Start here (state at the end of session 4, 2026-11-12: version 0.0.4, public on GitHub)
 
 | item | state |
 |------|-------|
-| version | `0.0.2` on `main` (tag `v0.0.2`); session 3 on `feat/session-3`, session 4 on `feat/session-4` (branched from it); both unmerged, CHANGELOG "Unreleased". No remote yet. History: [CHANGELOG.md](CHANGELOG.md) |
+| version | `0.0.4` on `main` (tag `v0.0.4`, merged from `feat/session-4`, which contains `feat/session-3`; no 0.0.3). Earlier: `v0.0.2`, `v0.0.1`. History: [CHANGELOG.md](CHANGELOG.md) |
+| public | repo https://github.com/chiahao3/zoner (public, remote `origin`, ssh); site https://chiahao3.github.io/zoner/ (GitHub Pages, deployed by Actions on every push to `main`); offline file https://chiahao3.github.io/zoner/zoner.html. Releasing: §10 |
 | stack | Vite 7 + TypeScript 5.9 + three.js 0.187, raw WebGL2 shaders; static site, no backend |
 | installed | npm packages only, local to `node_modules/` (see `package.json`): three, vite, vitest 3, typescript 5, vite-plugin-singlefile, playwright-core (drives the system `/usr/bin/google-chrome`; no browser download), @types/three. No conda env was created. Node 20.20 (nvm) was already present |
 | tests | `npm test`: 85 vitest tests (29 physics, 9 depth weight, 47 UI helpers/state) |
 | e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 40/40 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
 | builds | `npm run build:pages` produces `dist/` (site) and `dist/zoner.html` (~650 kB single file, runs from `file://`) |
-| deploy | `.github/workflows/pages.yml` (test, build, deploy on push to `main`). Needs a GitHub repo + Pages source "GitHub Actions" (§2) |
+| deploy | `.github/workflows/pages.yml` (test, build, deploy on push to `main`); Pages source is "GitHub Actions" (set via the API at the first release, §10) |
 
 Commands:
 
@@ -34,10 +35,10 @@ node bench/e2e.mjs --swiftshader    # software GL, slow-device worst case
 
 ## 2. Human checklist (for the user)
 
-- [ ] Create the GitHub repo and push (not done by Claude: pushing publishes). For example:
-      `gh repo create zoner --public --source . --remote origin && git push -u origin main --tags`.
-      Then Settings → Pages → Source: GitHub Actions. Pages on a private repo needs a paid plan.
-- [ ] Pick a license (package.json says `UNLICENSED` for now). three.js is MIT. The Lobato
+- [x] Create the GitHub repo and push (done at 0.0.4 at the user's request: public
+      https://github.com/chiahao3/zoner, Pages on). Commits carry the user's git author email.
+- [ ] Pick a license (the repo is public now; without a license others may view it but have no
+      rights to reuse it) (package.json says `UNLICENSED` for now). three.js is MIT. The Lobato
       coefficients are published numbers (cited).
 - [ ] At the microscope: does the DP orientation and handedness match your camera? The app shows the
       pattern seen from the gun, with no camera rotation. A per-microscope rotation/flip setting is §3 P1.
@@ -125,7 +126,7 @@ bench/e2e.mjs       headless Chrome: smoke, 23 checks, timings, screenshots (-> 
   pause: 61 beams take ~12 ms.
 - **Images by Fourier synthesis** (not atom splatting). Exact for a perfect slab, cost independent of
   thickness, and the same transfer function as the map, so the panels can't disagree.
-- **Resolution metric** (decided after two numerical failures, recorded in §10):
+- **Resolution metric** (decided after two numerical failures, recorded in §11):
   1. Global reflections with a 50% threshold: random high-index reflections inside the thin
      |g·n| shell gave a false 0.93 Å at a general orientation. Fixed by evaluating per low-index zone
      (index ≤ map setting), using only ZOLZ reflections. Regression test added.
@@ -242,7 +243,7 @@ bench/e2e.mjs       headless Chrome: smoke, 23 checks, timings, screenshots (-> 
   page errors when the first render times out.
 - Headless GPU: `--use-angle=vulkan --enable-features=Vulkan --ignore-gpu-blocklist` gives the real
   NVIDIA renderer. Without these flags you get SwiftShader.
-- The repo sits on an sshfs mount (`/home/cl2696/altas`). Keep benchmark output and throwaway
+- The repo sits on an sshfs mount. Keep benchmark output and throwaway
   worktrees on local NVMe (`~/scratch`); `node_modules` can be symlinked into a worktree.
 - `FloatTarget.resize` resets texture filtering to NEAREST; set LINEAR again after resizing when the
   target is sampled for display (image view).
@@ -365,7 +366,35 @@ Layout verified without scrolling at 1920×1080, 1600×1000, 1366×768 and 1280�
 windows shorter than ~650 px on desktop (panels get small but still fit), Safari/iOS WebGL2 (should work, since WebGL2 + EXT_color_buffer_float are standard);
 real microscope camera orientations (§2).
 
-## 10. Session log
+## 10. Releasing a version (GitHub + Pages)
+
+The public site updates by itself on every push to `main` (the Pages workflow tests, builds and
+deploys), so a release is: finish on a branch, bump, merge, tag, push, verify. Push only when the
+user asks for a release; pushing publishes.
+
+1. On the feature branch: `npm test` and `node bench/e2e.mjs --gpu` (and `--swiftshader`) pass, 0
+   console errors.
+2. Bump: `npm version X.Y.Z --no-git-tag-version` (package.json + package-lock.json). In
+   CHANGELOG.md, rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD` and open a new empty
+   `[Unreleased]` above it. Update §1 here. Commit ("Release X.Y.Z: version bump and changelog").
+3. Merge: `git checkout main && git merge --no-ff feat/<branch> -m "Merge feat/<branch>: zoner X.Y.Z"`,
+   then `git tag -a vX.Y.Z -m "zoner X.Y.Z"`.
+4. Push: `git push origin main && git push origin vX.Y.Z` (remote `origin` =
+   git@github.com:chiahao3/zoner.git). Feature branches stay local unless asked.
+5. Watch the deploy: `gh run list --workflow pages.yml -L 1`, then `gh run watch <id> --exit-status`
+   and, on failure, `gh run view <id> --log-failed`. Done only when the run is green.
+6. Verify the live site: `curl -sI https://chiahao3.github.io/zoner/` (200) and that the served JS is
+   the new build (the asset name in the live `index.html` matches `dist/index.html`). Pages can lag a
+   minute behind a green run. Optionally run the e2e against it:
+   `node bench/e2e.mjs --gpu --url https://chiahao3.github.io/zoner/`.
+7. Optional: `gh release create vX.Y.Z --title "zoner X.Y.Z" --notes-file <changelog section>`
+   with `dist/zoner.html` attached for offline PCs.
+
+One-time setup (already done at 0.0.4): `gh repo create zoner --public --source . --remote origin`,
+then enable Pages with the Actions source:
+`gh api -X POST repos/chiahao3/zoner/pages -f build_type=workflow`.
+
+## 11. Session log
 
 - **2026-11-11, session 1.** Repo created (`main` = scaffold; work on `feat/v1-app`).
   - Physics core written test-first (26, then 29 tests). Extinction distances validated (§8).
@@ -428,3 +457,5 @@ real microscope camera orientations (§2).
     click, dblclick; the first click started the snap animation and the dblclick re-read the
     half-rotated map. Pre-existing since 0.0.1, not the display range. Fixed by recording the
     first click's meaning; e2e regression check (40/40 on GPU and SwiftShader).
+  - Released 0.0.4: merged `feat/session-4` into `main`, tagged, first push to the public repo,
+    Pages enabled (§10 records the steps).

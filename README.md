@@ -71,5 +71,8 @@ node bench/e2e.mjs --swiftshader  # same on software GL (slow-laptop worst case)
 
 ## Deploy (GitHub Pages)
 
+Live: https://chiahao3.github.io/zoner/ (offline single file: https://chiahao3.github.io/zoner/zoner.html).
+
 `.github/workflows/pages.yml` runs the tests, builds the site plus `zoner.html` and deploys on every
-push to `main`. Do this once on GitHub: Settings → Pages → Source: **GitHub Actions**.
+push to `main` (Pages source: **GitHub Actions**). The release steps (version bump, changelog, merge,
+tag, push, verify the deploy) are in [PLAN.md §10](PLAN.md#10-releasing-a-version-github--pages).
