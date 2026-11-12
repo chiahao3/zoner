@@ -17,8 +17,8 @@ Related: [README.md](README.md) (use, physics summary, deploy).
 | version | `0.0.1` on `main` (tag `v0.0.1`, merged from `feat/v1-app`). Session 2 work is on `feat/session-2` (not merged; becomes 0.0.2). No remote yet. History: [CHANGELOG.md](CHANGELOG.md) |
 | stack | Vite 7 + TypeScript 5.9 + three.js 0.187, raw WebGL2 shaders; static site, no backend |
 | installed | npm packages only, local to `node_modules/` (see `package.json`): three, vite, vitest 3, typescript 5, vite-plugin-singlefile, playwright-core (drives the system `/usr/bin/google-chrome`; no browser download), @types/three. No conda env was created. Node 20.20 (nvm) was already present |
-| tests | `npm test`: 54 vitest tests (29 physics, 25 UI helpers/state) |
-| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 28/28 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
+| tests | `npm test`: 57 vitest tests (29 physics, 28 UI helpers/state) |
+| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 30/30 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
 | builds | `npm run build:pages` produces `dist/` (site) and `dist/zoner.html` (~650 kB single file, runs from `file://`) |
 | deploy | `.github/workflows/pages.yml` (test, build, deploy on push to `main`). Needs a GitHub repo + Pages source "GitHub Actions" (§2) |
 
@@ -165,6 +165,13 @@ bench/e2e.mjs       headless Chrome: smoke, 23 checks, timings, screenshots (-> 
 - **Map follows the image** (session 2b, user request): one `imgMode` for both. With the default
   depth sum through 20 nm the map's bright regions are small (tilt tolerance ≈ lateral/t ≈ 0.15°);
   that is correct and is the reason MEP slices help.
+- **Holder range on the map** (fourth round): the old hatch (×0.25/×0.55) vanished over the grey
+  "not atomic" background. Now the out-of-range region is desaturated and dimmed with red stripes
+  every 10 CSS px (uPx scales device px), and the overlay draws the reachable-region outline from
+  `holderOutline()` (beam directions along the α/β rectangle edge, tested by round trip through
+  `tiltToBring`). Out-of-range zone markers get a red ring.
+- **Zone labels** (fourth round): `placeLabels()` greedy, lowest index first, real text widths
+  (`idxWidth`), no index-based cut. Si [110] at ±30°: 27 labels at index ≤ 3, 88 at ≤ 5.
 - **Resolution colour scale capped at 1.5 Å** (user request: coarser is not atomic resolution).
   `dRange()` = [lateral, max(1.5, 1.25·lateral)]; the same value is the metric's dWorst, so the
   map, the zone markers and the orientation readout ("> 1.5 Å") agree, and zoneCutAngle prunes
@@ -309,3 +316,5 @@ real microscope camera orientations (§2).
   - Third round: resolution colour scale capped at 1.5 Å (readout agrees); holder switch engages at
     any time (default reading current α/β inside the range, else 0, 0; re-anchors; L shortcut).
     54 unit tests, 28/28 e2e on GPU and SwiftShader.
+  - Fourth round: clearer holder range on the map (outline, red stripes, red-ringed markers);
+    zone labels follow the index limit. 57 unit tests, 30/30 e2e on GPU and SwiftShader.

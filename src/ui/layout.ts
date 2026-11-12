@@ -22,3 +22,16 @@ export function ringAngles(rangeDeg: number, maxVisibleDeg: number): number[] {
   for (let a = s; a <= Math.min(maxVisibleDeg, 179.9) + 1e-9; a += s) out.push(a);
   return out;
 }
+
+/** Greedy label placement: candidates in priority order (lowest zone index first); a label is
+ *  placed if its box (x, y = top-left, w, h in px) stays inside the panel and does not overlap
+ *  one already placed. Returns which candidates get a label. */
+export function placeLabels(c: { x: number; y: number; w: number; h: number }[], W: number, H: number): boolean[] {
+  const placed: { x: number; y: number; w: number; h: number }[] = [];
+  return c.map((b) => {
+    if (b.x < 0 || b.y < 0 || b.x + b.w > W || b.y + b.h > H) return false;
+    if (placed.some((p) => b.x < p.x + p.w && p.x < b.x + b.w && b.y < p.y + p.h && p.y < b.y + b.h)) return false;
+    placed.push(b);
+    return true;
+  });
+}

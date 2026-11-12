@@ -49,6 +49,13 @@ Session 2 (branch `feat/session-2`; becomes 0.0.2 when merged).
   current α/β if inside the range, otherwise 0, 0 (the orientation is always kept). Re-engaging
   re-anchors. New shortcut **L** toggles it, also with the orientation panel hidden.
 
+### Changed (session 2, fourth round)
+- Holder range on the stereogram is clearer: a solid red outline of the reachable region, the
+  region beyond it dimmed with red diagonal stripes (fixed on-screen spacing), zone markers beyond
+  it ringed in red, and a caption with the range.
+- Stereogram zone labels follow the zone-index limit: every zone within the limit gets a label
+  unless it would collide with a lower-index one (was: only the few lowest-index zones).
+
 ### Fixed
 - Arrow keys stopped working after clicking a checkbox.
 - Canvases capped at their maximum backing size kept the cap per side, which stretched non-square

@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { beamMode } from '../src/physics/diffraction';
 import { wavelength } from '../src/physics/constants';
 import { builtinCrystal, species } from '../src/physics/crystal';
-import { canvasSize, ringStep, ringAngles } from '../src/ui/layout';
+import { canvasSize, ringStep, ringAngles, placeLabels } from '../src/ui/layout';
+import { holderOutline, mountForZone, tiltToBring } from '../src/physics/orientation';
 import { Store, DEFAULTS } from '../src/ui/state';
 import { decodeHash, encodeHash } from '../src/ui/hash';
 import { GROUPS } from '../src/ui/controls';
@@ -197,5 +198,38 @@ describe('session 2c: resolution colour scale and holder switch that always enga
     expect(s.engageHolder(5, 5)).toBe(true);
     expect(s.R().every((x, i) => Math.abs(x - R0[i]) < 1e-12)).toBe(true);
     expect(s.holder.alpha).toBeCloseTo(5 * DEG, 12);
+  });
+});
+
+describe('session 2d: stereogram labels follow the zone index limit', () => {
+  it('every candidate that does not collide gets a label, whatever its index', () => {
+    const c = [
+      { x: 0, y: 0, w: 30, h: 12 },
+      { x: 100, y: 0, w: 50, h: 12 }, // high index, far away: labelled
+      { x: 10, y: 4, w: 30, h: 12 }, // collides with the first: skipped
+      { x: 0, y: 40, w: 60, h: 12 },
+    ];
+    expect(placeLabels(c, 400, 400)).toEqual([true, true, false, true]);
+  });
+  it('earlier candidates (lower index) win collisions, and labels stay inside the panel', () => {
+    expect(placeLabels([{ x: 0, y: 0, w: 30, h: 12 }, { x: 0, y: 0, w: 30, h: 12 }], 400, 400)).toEqual([true, false]);
+    expect(placeLabels([{ x: 390, y: 50, w: 30, h: 12 }], 400, 400)).toEqual([false]);
+  });
+});
+
+describe('session 2d: holder range outline', () => {
+  it('outline directions sit on the edge of the alpha/beta rectangle', () => {
+    const L = builtinCrystal('Si').lattice;
+    const M = mountForZone(L, [1, 1, 0]);
+    const aL = 35 * DEG, bL = 30 * DEG;
+    const pts = holderOutline(M, aL, bL, 16);
+    expect(pts.length).toBe(64);
+    for (const c of pts) {
+      const t = tiltToBring(M, c);
+      const onEdge = Math.abs(Math.abs(t.alpha) - aL) < 1e-9 || Math.abs(Math.abs(t.beta) - bL) < 1e-9;
+      expect(onEdge).toBe(true);
+      expect(Math.abs(t.alpha)).toBeLessThanOrEqual(aL + 1e-9);
+      expect(Math.abs(t.beta)).toBeLessThanOrEqual(bL + 1e-9);
+    }
   });
 });

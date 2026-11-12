@@ -422,6 +422,26 @@ await pf.waitForTimeout(200);
 const cs = await pf.evaluate(() => ({ off: !window.zoner.store.p.enforceLimits, range: window.zoner.store.dRange() }));
 check('L toggles off again; resolution colour scale is 0.5-1.5 A', cs.off && cs.range[0] === 0.5 && cs.range[1] === 1.5, cs);
 
+// zone labels follow the index limit
+const lab = async (n) => {
+  await pf.evaluate((n) => { const z = window.zoner; z.store.p.enforceLimits = false; z.store.loadCrystal('Si'); z.store.set('mapRange', 30); z.store.set('mapZoneIdx', n); z.markAll(); }, n);
+  await pf.waitForTimeout(400);
+  return pf.evaluate(() => window.zoner.map.labelled.map((u) => Math.max(...u.map(Math.abs))));
+};
+const l3 = await lab(3), l5 = await lab(5);
+await pf.screenshot({ path: join(out, `map-idx5-${mode}.png`) });
+check('stereogram labels zones up to the index limit (3 -> 5 adds index-4/5 labels)',
+  l3.every((m) => m <= 3) && l5.some((m) => m > 3) && l5.every((m) => m <= 5) && l5.length > l3.length, { n3: l3.length, n5: l5.length, max5: Math.max(...l5) });
+// holder range: outline drawn when engaged, near the edge of the range
+await pf.evaluate(() => { const z = window.zoner; z.store.set('mapZoneIdx', 3); z.store.engageHolder(28, 22); z.markAll(); });
+await pf.waitForTimeout(400);
+const ol = await pf.evaluate(() => window.zoner.map.outlinePts);
+await pf.screenshot({ path: join(out, `holder-range-${mode}.png`) });
+await pf.evaluate(() => { window.zoner.store.releaseHolder(); window.zoner.markAll(); });
+await pf.waitForTimeout(300);
+const ol0 = await pf.evaluate(() => window.zoner.map.outlinePts);
+check('holder range outline is drawn on the map only while the range is on', ol > 10 && ol0 === 0, { ol, ol0 });
+
 // hover readout on the map
 const mb2 = await pf.locator('#map-ov').boundingBox();
 await pf.mouse.move(mb2.x + mb2.width / 2 + 60, mb2.y + mb2.height / 2 - 30);

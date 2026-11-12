@@ -22,6 +22,18 @@ export class Holder {
   }
 }
 
+/** Crystal directions on the beam at the edge of the holder range |alpha| <= aL, |beta| <= bL,
+ *  walking the alpha/beta rectangle (nPerSide points per side, corners included once). */
+export function holderOutline(mount: Mat3, aL: number, bL: number, nPerSide = 48): Vec3[] {
+  const out: Vec3[] = [];
+  const at = (a: number, b: number) => new Holder(mount, a, b).beamCrystal();
+  for (let i = 0; i < nPerSide; i++) out.push(at(aL, -bL + (2 * bL * i) / nPerSide));
+  for (let i = 0; i < nPerSide; i++) out.push(at(aL - (2 * aL * i) / nPerSide, bL));
+  for (let i = 0; i < nPerSide; i++) out.push(at(-aL, bL - (2 * bL * i) / nPerSide));
+  for (let i = 0; i < nPerSide; i++) out.push(at(-aL + (2 * aL * i) / nPerSide, -bL));
+  return out;
+}
+
 /** Tilts (alpha, beta) that bring the crystal direction u (Cartesian, unit) onto +z for this mount. */
 export function tiltToBring(mount: Mat3, u: Vec3): { alpha: number; beta: number } {
   const v = normalize(matVec(mount, u));
