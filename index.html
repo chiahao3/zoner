@@ -43,15 +43,17 @@
         <tr><td>0</td><td>α = β = 0</td></tr>
         <tr><td>T / H</td><td>training mode / hint</td></tr>
         <tr><td>Diffraction</td><td>drag: the Kikuchi pattern follows the pointer; Shift-drag: in-plane rotation; right-drag: pan; wheel: camera length</td></tr>
-        <tr><td>Stereogram</td><td>drag: grab the map; click a zone marker or double-click a spot to tilt there; wheel: range</td></tr>
-        <tr><td>Real space / images</td><td>drag: trackball tilt; right-drag (3D): orbit the camera only; wheel: zoom</td></tr>
+        <tr><td>Stereogram</td><td>drag: grab the map; click a zone marker or double-click a spot to tilt there; wheel: range; hover: tilt from the beam and the α/β needed</td></tr>
+        <tr><td>Crystal model / image</td><td>drag: trackball tilt; right-drag (3D): orbit the camera only; wheel: zoom</td></tr>
       </table>
       <h3>What is drawn</h3>
+      <p>Left column: diffraction space. Right column: real space. The orientation panel (ⓘ) sits on the right.</p>
       <ul>
-        <li><b>Diffraction</b>: reflections at their excitation error s<sub>g</sub> (beam along −z). Kinematic, per-reflection two-beam (default), or many-beam Bloch wave computed when you stop moving. Convergent mode evaluates the rocking curve across every disk, so HOLZ lines and K-M fringes appear. Kikuchi bands are drawn for the strongest planes; the arrow points to the nearest zone-axis centre.</li>
-        <li><b>Depth sum / MEP slice</b>: phase σ∫V dz by Fourier synthesis of the perfect-crystal potential, each reflection weighted by t·sinc(t g<sub>z</sub>) (slice: Δz·sinc(Δz g<sub>z</sub>) and a Gaussian depth PSF) and a Gaussian lateral PSF. Tilt smears columns by t·tanθ.</li>
-        <li><b>Resolution stereogram</b>: centred on the beam. Colour = finest 2D lattice still resolved if you tilted there: two non-collinear reflections with |g| ≤ 1/(lateral resolution) whose depth transfer stays ≥ 0.5. Grey = only 1D fringes. Hatched = beyond the holder limits.</li>
-        <li><b>Real space</b>: the specimen slab with slice boundaries and the current MEP slice highlighted, or a unit-cell cluster.</li>
+        <li><b>Diffraction</b>: reflections at their excitation error s<sub>g</sub> (beam along −z). Kinematic, per-reflection two-beam (default), or many-beam Bloch wave computed when you stop moving. One convergence angle α sets the illumination: α = 0 is a parallel beam; otherwise disks of radius α are drawn as CBED once they are bigger than the spot size (zoom in to see small disks), with the rocking curve evaluated across every disk, so HOLZ lines and K-M fringes appear. Kikuchi bands are drawn for the strongest planes; the arrow points to the nearest zone-axis centre.</li>
+        <li><b>Resolution stereogram</b>: centred on the beam. Colour = projected 2D resolution if you tilted there: the worst in-plane direction still resolved by zone reflections with |g| ≤ 1/(lateral resolution) inside the first lobe of the depth transfer. Grey = only 1D fringes. Hatched = beyond the holder range. Dashed rings mark the total tilt from the current orientation.</li>
+        <li><b>Crystal model</b>: the specimen slab with slice boundaries and the current MEP slice highlighted (atoms outside it are dimmed), or a unit-cell cluster. The legend lists each species.</li>
+        <li><b>Real-space image</b>: depth sum (default) or MEP slice, switched in the panel header. Phase σ∫V dz by Fourier synthesis of the perfect-crystal potential, each reflection weighted by t·sinc(t g<sub>z</sub>) (slice: Δz·sinc(Δz g<sub>z</sub>) and a Gaussian depth PSF) and a Gaussian lateral PSF. Tilt smears columns by t·tanθ.</li>
+        <li><b>Holder range</b>: α and β limits are symmetric: 35 means −35° … +35°.</li>
       </ul>
       <p>Offline: <a href="zoner.html" download>download zoner.html</a>, a single self-contained file that runs from disk with no network (for microscope PCs).</p>
       <p class="muted">Qualitative tool: feature positions and symmetry are right; intensities are approximate (no absorption, perfect crystal).</p>

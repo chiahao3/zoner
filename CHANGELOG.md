@@ -5,6 +5,35 @@ versions follow [SemVer](https://semver.org/) (0.0.x while the UI is still movin
 
 ## [Unreleased]
 
+Session 2 (branch `feat/session-2`; becomes 0.0.2 when merged).
+
+### Changed
+- Workspace is a 2×2 grid that always fits the window (no page scroll on desktop): diffraction
+  space on the left (DP over stereogram), real space on the right (crystal model over image). The
+  orientation panel moved to a collapsible right rail (ⓘ). Phones still stack one column.
+- Depth sum and MEP slice share one **Real-space image** panel with a toggle; depth sum is the
+  default. The slice-depth slider sits in the panel header in slice mode.
+- One **convergence angle** for everything (default 3 mrad). Parallel vs CBED is automatic: α = 0
+  is parallel; disks are drawn as CBED once larger than the spot size. The DP names the mode.
+  The separate illumination switch and DP convergence entry are gone.
+- Holder limits are labelled "α/β range ±" and the orientation panel spells out the symmetric
+  range (α −35° … +35°).
+- CBED display uses √ scaling unless the disks really overlap.
+- e2e output goes to `~/scratch/zoner-bench` (local disk) by default.
+
+### Added
+- Stereogram: dashed rings of total tilt from the current orientation, labelled in degrees, and a
+  hover readout of the tilt and the α/β needed for the direction under the pointer.
+- Crystal model: legend of each atomic species (colour, symbol, sites per cell).
+- Links carry `v=2`; links from 0.0.1 are migrated (DP convergence → the single angle).
+- Tests: `tests/ui.test.ts` (auto illumination, ring spacing, canvas sizing, species legend, link
+  migration); e2e grew from 12 to 23 checks (layout fit at four window sizes, image toggle, legend,
+  illumination, rings, hover, phone stacking).
+
+### Fixed
+- Canvases capped at their maximum backing size kept the cap per side, which stretched non-square
+  panels; both sides now scale together.
+
 ## [0.0.1] - 2026-11-11
 
 First working version (session 1).
