@@ -5,6 +5,66 @@ versions follow [SemVer](https://semver.org/) (0.0.x while the UI is still movin
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-11-12
+
+Sessions 3 and 4 (merged from `feat/session-4`, which contains `feat/session-3`). There is no
+0.0.3 release. First public release on GitHub (https://github.com/chiahao3/zoner), served at
+https://chiahao3.github.io/zoner/.
+
+Session 4:
+
+### Added
+- **Collection angle β** (mrad, default 64): the half-width of the square detector.
+- **Detector** button in the diffraction panel: draws the square detector about the optic axis
+  (aligned with the DP axes; corners at √2 β) and dims beyond it with red stripes. The
+  illumination (CBED α) and detector labels sit at the top right, clear of the hover readout.
+- Convergence and collection fields are typed in mrad and show the reciprocal distance θ·K in
+  brackets, e.g. "mrad (0.152 Å⁻¹)".
+- DP hover: angle from the beam of the direction whose Kikuchi centre is under the pointer, in
+  degrees, mrad and Å⁻¹, with the α/β that bring it onto the beam (the map hover uses the same
+  format, now to 0.01°).
+- **λ/β** checkbox next to the lateral resolution (same rules as λ/α²). β = 0 gives the 5 Å cap.
+- **DP FOV** button on the stereogram: the map half-range follows the DP half-width
+  (asin(q/K)); zooming either panel keeps them matched; choosing a map range ends it. Tilt rings
+  get 0.1/0.2/0.5° steps for the small synced ranges.
+- **Global display range** for the real-space image, one per mode (depth sum, MEP slice): the
+  phase range of the same image with the crystal's low-index zone (Si [110], SrTiO3 [001],
+  GaN [2-1-10]) exactly on the beam. A mistilted crystal shows its real loss of contrast (Si,
+  20 nm: depth sum 7.2 rad on zone, 2.7 rad at 1°, 0.6 rad at 3°; the slice keeps half at 3°).
+  The readout gives the image's own p-p against the global range.
+
+### Fixed
+- Stereogram double-click: on a zone marker it now keeps the snap onto the zone, and elsewhere it
+  goes to the direction that was under the pointer. The first click of a double-click used to
+  start the zone snap, and the double-click then re-read the half-rotated map and tilted 0.2–0.3°
+  off (present since 0.0.1).
+
+### Changed
+- **Auto contrast is off by default.** On, it stretches each image to its own range as before.
+  Off now means the global range above (the old "locked = keep the current range" is gone).
+
+Session 3:
+
+### Fixed
+- MEP slice of a thin specimen: the slice weight is now the slice window blurred by the depth PSF
+  **and cut to the specimen [0, t]**, instead of a Gaussian depth PSF on an infinite slab. A
+  0.5 nm specimen in slice mode now tilts like 0.5 nm (smear-equivalent length 0.26 nm, was
+  1.67 nm = the PSF). Slices partly or fully outside the specimen lose that part of their weight
+  (fully outside: empty image). Slices deep inside a thick crystal are unchanged. The image, the
+  stereogram and the orientation readout share this depth transfer.
+- Orientation panel: the slice "column smear" uses the slice's effective depth length (1/pass
+  width), so it is never longer than the specimen; "—" when the slice lies outside it.
+
+### Added
+- **λ/α²** checkbox next to the depth resolution: fills it from the high tension and the
+  convergence angle and keeps it updated; typing a depth resolution unchecks it. α = 0 gives the
+  cap of 1000 nm (now also the control's maximum). Off by default (3 nm). Saved in links.
+
+### Internal
+- Image Fourier coefficients moved to `src/physics/image.ts` (pure, unit-tested).
+- `transfer.ts`: `depthWeight` / `depthFT` (exact transform of a piecewise-linear weight) replace
+  the closed-form slice transfer; a total-variation bound skips reflections that cannot pass.
+
 ## [0.0.2] - 2026-11-11
 
 Session 2 (merged from `feat/session-2`).

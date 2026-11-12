@@ -105,6 +105,11 @@ timings.push(await bench('Si kinematic parallel', "z.store.p.convAlpha=0; z.stor
 timings.push(await bench('Si lateral 0.3 A', "z.store.p.dpTheory='twobeam'; z.store.p.lateralRes=0.3;"));
 timings.push(await bench('SrTiO3 [001]', "z.store.p.lateralRes=0.5; z.store.loadCrystal('SrTiO3');"));
 timings.push(await bench('GaN [2-1-10]', "z.store.loadCrystal('GaN');"));
+timings.push(await bench('Si thin 0.5 nm, slice', "z.store.loadCrystal('Si'); z.store.p.thickness=0.5; z.store.p.sliceDepth=0.25;"));
+timings.push(await bench('Si auto depth (alpha 25 mrad -> 3.15 nm)', "z.store.p.thickness=20; z.store.p.sliceDepth=10; z.store.set('convAlpha', 25); z.store.set('depthAuto', true);"));
+timings.push(await bench('Si lambda/beta (64 mrad -> 0.308 A)', "z.store.set('depthAuto', false); z.store.p.depthRes=3; z.store.p.convAlpha=3; z.store.set('lateralAuto', true);"));
+timings.push(await bench('Si detector range on, map synced to DP', "z.store.set('lateralRes', 0.5); z.store.set('dpDetector', true); z.store.set('dpRange', 6); z.store.set('mapSyncDP', true);"));
+await page.evaluate(() => { const s = window.zoner.store; s.set('mapSyncDP', false); s.set('mapRange', 20); s.set('dpDetector', false); s.set('dpRange', 2.2); s.set('lateralAuto', false); s.p.lateralRes = 0.5; s.set('depthAuto', false); s.p.depthRes = 3; s.p.convAlpha = 3; s.p.thickness = 20; s.p.sliceDepth = 10; });
 // Bloch timings at several N
 const bloch = await page.evaluate(async () => {
   const z = window.zoner;
@@ -317,10 +322,11 @@ await pf.waitForTimeout(500);
 const defaults = await pf.evaluate(() => {
   const z = window.zoner, p = z.store.p;
   return { imgMode: p.imgMode, convAlpha: p.convAlpha, cbed: z.dp.cbed, rings: z.map.rings.slice(), lateral: p.lateralRes, depth: p.depthRes, limits: p.enforceLimits,
-    estimateButtons: /λ\/2α|λ\/α²/.test(document.getElementById('side').innerText) };
+    estimateButtons: /λ\/2α/.test(document.getElementById('side').innerText) || document.querySelectorAll('#side button').length > 0,
+    depthAuto: document.getElementById('ctl-depthAuto')?.checked };
 });
-check('defaults: depth sum, 3 mrad CBED, 0.5 A / 3 nm, no rings, holder range off, no λ/2α buttons',
-  defaults.imgMode === 'sum' && defaults.convAlpha === 3 && defaults.cbed && defaults.rings.length === 0 && defaults.lateral === 0.5 && defaults.depth === 3 && !defaults.limits && !defaults.estimateButtons, defaults);
+check('defaults: depth sum, 3 mrad CBED, 0.5 A / 3 nm (λ/α² unchecked), no rings, holder range off, no λ/2α buttons',
+  defaults.imgMode === 'sum' && defaults.convAlpha === 3 && defaults.cbed && defaults.rings.length === 0 && defaults.lateral === 0.5 && defaults.depth === 3 && !defaults.limits && !defaults.estimateButtons && defaults.depthAuto === false, defaults);
 await pf.locator('#panel-map button', { hasText: 'Rings' }).click();
 await pf.waitForTimeout(300);
 const rings = await pf.evaluate(() => window.zoner.map.rings.slice());
@@ -448,6 +454,193 @@ await pf.mouse.move(mb2.x + mb2.width / 2 + 60, mb2.y + mb2.height / 2 - 30);
 await pf.waitForTimeout(100);
 const hov = await pf.locator('#map-lbl').innerText();
 check('stereogram hover shows the tilt from the beam and the alpha/beta needed', /from beam/.test(hov) && /α/.test(hov) && /β/.test(hov), hov);
+
+// ---- session 3: finite-specimen slice, auto depth resolution ---------------------------------
+// lambda/alpha^2 checkbox, driven through the sidebar
+await pf.evaluate(() => { const z = window.zoner; z.store.loadCrystal('Si'); z.markAll(); });
+await pf.locator('#ctl-depthAuto').check();
+await pf.waitForTimeout(150);
+const da1 = await pf.evaluate(() => ({ v: +document.getElementById('ctl-depthRes').value, p: window.zoner.store.p.depthRes }));
+await pf.locator('#ctl-convAlpha').fill('25');
+await pf.locator('#ctl-convAlpha').press('Tab');
+await pf.waitForTimeout(150);
+const da2 = await pf.evaluate(() => ({ v: +document.getElementById('ctl-depthRes').value, on: document.getElementById('ctl-depthAuto').checked }));
+await pf.locator('#ctl-depthRes').fill('4');
+await pf.locator('#ctl-depthRes').press('Tab');
+await pf.waitForTimeout(150);
+const da3 = await pf.evaluate(() => ({ p: window.zoner.store.p.depthRes, on: document.getElementById('ctl-depthAuto').checked, auto: window.zoner.store.p.depthAuto }));
+check('λ/α² checkbox fills the depth resolution (3 mrad: 218.75 nm, 25 mrad: 3.15 nm); typing a value unchecks it',
+  Math.abs(da1.v - 218.75) < 0.01 && da1.p === da1.v && Math.abs(da2.v - 3.15) < 1e-9 && da2.on && da3.p === 4 && !da3.on && !da3.auto, { da1, da2, da3 });
+await pf.evaluate(() => { const z = window.zoner; z.store.set('convAlpha', 3); z.store.set('depthRes', 3); });
+// thin specimen: the slice cannot tilt worse than the whole (0.5 nm) specimen
+const thin = await pf.evaluate(() => {
+  const z = window.zoner;
+  z.store.set('thickness', 0.5); z.store.set('sliceDepth', 0.25); z.store.set('imgMode', 'slice');
+  z.store.mountZone([1, 1, 0]);
+  z.store.setTilt(4 * Math.PI / 180, 1 * Math.PI / 180);
+  z.markAll();
+  return null;
+});
+await pf.waitForTimeout(400);
+const thinTxt = await pf.evaluate(() => {
+  const kv = [...document.querySelectorAll('#info .kv')].map((e) => e.innerText);
+  return { slice: kv.find((t) => /MEP slice/.test(t)), sum: kv.find((t) => /depth sum/.test(t)) };
+});
+const num = (t) => parseFloat((t ?? '').replace(/^[^\d>]*/, '').replace('>', ''));
+check('thin specimen (0.5 nm, 4° off): MEP slice resolution equals the depth sum (finite-specimen slice)',
+  thinTxt.slice && thinTxt.sum && Math.abs(num(thinTxt.slice.split('\n').pop()) - num(thinTxt.sum.split('\n').pop())) < 0.02, thinTxt);
+await pf.screenshot({ path: join(out, `thin-slice-${mode}.png`) });
+await pf.evaluate(() => { const s = window.zoner.store; s.set('thickness', 20); s.set('sliceDepth', 10); s.set('imgMode', 'sum'); s.setTilt(0, 0); window.zoner.markAll(); });
+
+// ---- session 4: collection angle, detector range, derived 1/A, DP hover, lambda/beta, FOV sync --
+const unitTxt = () => pf.evaluate(() => {
+  const t = (id) => { const u = document.querySelector(id).closest('.row').querySelector('.unit'); return { s: u.textContent.replace(/\s+/g, ' '), clipped: u.scrollWidth > u.clientWidth + 1 || u.getBoundingClientRect().right > document.getElementById('side').getBoundingClientRect().right }; };
+  const a = t('#ctl-convAlpha'), b = t('#ctl-collAngle');
+  return { a: a.s, b: b.s, clipped: a.clipped || b.clipped };
+});
+const u0 = await unitTxt();
+await pf.locator('#ctl-convAlpha').fill('25');
+await pf.locator('#ctl-convAlpha').press('Tab');
+await pf.waitForTimeout(150);
+const u1 = await unitTxt();
+const a25 = await pf.evaluate(() => ({ p: window.zoner.store.p.convAlpha, v: document.getElementById('ctl-convAlpha').value }));
+check('angle fields: typed in mrad, 1/A shown in brackets, not clipped (3 mrad 0.152, 64 mrad 3.25, 25 mrad 1.27)',
+  u0.a === 'mrad (0.152 Å⁻¹)' && u0.b === 'mrad (3.25 Å⁻¹)' && u1.a === 'mrad (1.27 Å⁻¹)' && !u0.clipped && a25.p === 25 && a25.v === '25', { u0, u1, a25 });
+await pf.locator('#side details').first().screenshot({ path: join(out, `side-angles-${mode}.png`) });
+await pf.evaluate(() => window.zoner.store.set('convAlpha', 3));
+// detector range toggle
+await pf.locator('#panel-dp button', { hasText: 'Detector' }).click();
+await pf.waitForTimeout(250);
+const det1 = await pf.evaluate(() => ({ on: window.zoner.store.p.dpDetector, d: window.zoner.dp.detector, btn: document.querySelector('#panel-dp button.on')?.textContent }));
+await pf.evaluate(() => { window.zoner.store.set('dpRange', 6); });
+await pf.waitForTimeout(300);
+const det2 = await pf.evaluate(() => window.zoner.dp.detector);
+await pf.locator('#panel-dp').screenshot({ path: join(out, `dp-detector-${mode}.png`) });
+await pf.locator('#panel-dp button', { hasText: 'Detector' }).click();
+await pf.waitForTimeout(250);
+const det3 = await pf.evaluate(() => ({ on: window.zoner.store.p.dpDetector, d: window.zoner.dp.detector }));
+check('Detector button toggles the square detector (half-width = collection angle) on the DP (covers the view at 2.2 1/A, edge drawn at 6 1/A)',
+  det1.on && det1.btn === 'Detector' && det1.d && !det1.d.visible && Math.abs(det1.d.rq - 3.251) < 0.01 && det2.visible && !det3.on && det3.d === null, { det1, det2, det3 });
+await pf.evaluate(() => window.zoner.store.set('dpRange', 2.2));
+// DP hover at the [110] Kikuchi centre: same alpha/beta as the "go" table, consistent deg / mrad / 1/A
+await pf.evaluate(() => { const z = window.zoner; z.store.mountZone([1, 1, 0]); z.store.setTilt(1.2 * Math.PI / 180, -0.7 * Math.PI / 180); z.dp.pan = [0, 0]; z.markAll(); });
+await pf.waitForTimeout(400);
+const tgt = await pf.evaluate(() => {
+  const z = window.zoner, q = z.kc([1, 1, 0]), r = document.getElementById('dp-ov').getBoundingClientRect(), sc = z.dp.scale();
+  const row = document.querySelector('#info table.zones tbody tr').innerText.split(/\s+/);
+  return { x: r.left + r.width / 2 + q[0] * sc, y: r.top + r.height / 2 - q[1] * sc, q, K: z.store.K, row };
+});
+await pf.mouse.move(tgt.x, tgt.y);
+await pf.waitForTimeout(150);
+const dpHov = await pf.locator('#dp-lbl').innerText();
+await pf.evaluate(() => window.zoner.store.set('dpDetector', true));
+await pf.waitForTimeout(250);
+await pf.locator('#panel-dp').screenshot({ path: join(out, `dp-hover-${mode}.png`) });
+await pf.evaluate(() => window.zoner.store.set('dpDetector', false));
+const m = dpHov.match(/([\d.]+)° from beam \(([\d.]+) mrad, ([\d.]+) Å⁻¹\)\s+α (-?[\d.]+)° β (-?[\d.]+)°/);
+const qAbs = Math.hypot(...tgt.q);
+const okHover = m && Math.abs(+m[4] - +tgt.row[2]) < 0.03 && Math.abs(+m[5] - +tgt.row[3]) < 0.03 && Math.abs(+m[1] - parseFloat(tgt.row[1])) < 0.03
+  && Math.abs(+m[2] - +m[1] * Math.PI / 180 * 1000) < 0.2 && Math.abs(+m[3] - qAbs) < 0.004;
+check('DP hover at the [110] Kikuchi centre: tilt from beam (deg, mrad, 1/A) and α/β match the go table', okHover, { dpHov, row: tgt.row, qAbs });
+await pf.mouse.move(5, 5);
+// map field of view synced to the DP
+await pf.locator('#panel-map button', { hasText: 'DP FOV' }).click();
+await pf.waitForTimeout(400);
+const fov = await pf.evaluate(() => {
+  const z = window.zoner, p = z.store.p;
+  const dpR = document.getElementById('dp-ov').getBoundingClientRect(), mR = document.getElementById('map-ov').getBoundingClientRect();
+  const q = z.kc([1, 1, 0]), mp = z.mapPos([1, 1, 0]);
+  const fDP = Math.hypot(...q) / p.dpRange; // fraction of the half-width (pan 0)
+  const fMap = Math.hypot(mp[0] - mR.width / 2, mp[1] - mR.height / 2) / (Math.min(mR.width, mR.height) / 2);
+  return { on: p.mapSyncDP, range: p.mapRange, want: Math.asin(p.dpRange / z.store.K) * 180 / Math.PI, fDP, fMap, sel: document.getElementById('ctl-mapRange').selectedOptions[0].textContent };
+});
+await pf.screenshot({ path: join(out, `fov-sync-${mode}.png`) });
+const mb3 = await pf.locator('#map-ov').boundingBox();
+await pf.mouse.move(mb3.x + mb3.width / 2, mb3.y + mb3.height / 2);
+await pf.mouse.wheel(0, 300);
+await pf.waitForTimeout(300);
+const fov2 = await pf.evaluate(() => { const z = window.zoner, p = z.store.p; return { on: p.mapSyncDP, dp: p.dpRange, range: p.mapRange, want: Math.asin(p.dpRange / z.store.K) * 180 / Math.PI }; });
+await pf.evaluate(() => { document.getElementById('ctl-mapRange').closest('details').open = true; });
+await pf.selectOption('#ctl-mapRange', '20');
+await pf.waitForTimeout(200);
+const fov3 = await pf.evaluate(() => ({ on: window.zoner.store.p.mapSyncDP, range: window.zoner.store.p.mapRange, btn: document.querySelector('#panel-map button.on')?.textContent ?? null }));
+check('DP FOV: the map half-range follows the DP (same marker fraction), map wheel zooms both, choosing a range ends it',
+  fov.on && Math.abs(fov.range - fov.want) < 1e-9 && Math.abs(fov.fMap / fov.fDP - 1) < 0.02 && /\(DP\)/.test(fov.sel)
+  && fov2.on && fov2.dp > 2.2 && Math.abs(fov2.range - fov2.want) < 1e-9 && !fov3.on && fov3.range === 20 && fov3.btn !== 'DP FOV', { fov, fov2, fov3 });
+await pf.evaluate(() => window.zoner.store.set('dpRange', 2.2));
+// lambda/beta checkbox
+await pf.locator('#ctl-lateralAuto').check();
+await pf.waitForTimeout(150);
+const lb1 = await pf.evaluate(() => ({ v: +document.getElementById('ctl-lateralRes').value, p: window.zoner.store.p.lateralRes }));
+await pf.locator('#ctl-collAngle').fill('60');
+await pf.locator('#ctl-collAngle').press('Tab');
+await pf.waitForTimeout(150);
+const lb2 = await pf.evaluate(() => ({ p: window.zoner.store.p.lateralRes, on: document.getElementById('ctl-lateralAuto').checked }));
+await pf.locator('#ctl-lateralRes').fill('0.5');
+await pf.locator('#ctl-lateralRes').press('Tab');
+await pf.waitForTimeout(150);
+const lb3 = await pf.evaluate(() => ({ p: window.zoner.store.p.lateralRes, on: document.getElementById('ctl-lateralAuto').checked }));
+check('λ/β checkbox fills the lateral resolution (64 mrad: 0.308 Å, 60 mrad: 0.328 Å); typing a value unchecks it',
+  lb1.v === 0.308 && lb1.p === 0.308 && lb2.p === 0.328 && lb2.on && lb3.p === 0.5 && !lb3.on, { lb1, lb2, lb3 });
+await pf.evaluate(() => window.zoner.store.set('collAngle', 64));
+// stereogram double-click: on a zone marker it keeps the zone snap; elsewhere it goes to the
+// direction that was under the pointer (regression: the dblclick used to re-read a half-rotated map)
+const dbl = {};
+for (const what of ['marker', 'empty']) {
+  await pf.evaluate(() => { const z = window.zoner, s = z.store; s.set('mapSyncDP', false); s.set('mapRange', 20); s.loadCrystal('Si'); s.mountZone([1, 1, 0]); s.setTilt(4 * Math.PI / 180, 2 * Math.PI / 180); z.markAll(); });
+  await pf.waitForTimeout(500);
+  const mb = await pf.locator('#map-ov').boundingBox();
+  const tgt = await pf.evaluate((what) => {
+    const z = window.zoner, r = document.getElementById('map-ov').getBoundingClientRect();
+    if (what === 'marker') { const m = z.mapPos([1, 1, 0]); return { x: m[0] + 3, y: m[1] - 2 }; }
+    const h = Math.min(r.width, r.height) / 2;
+    for (let k = 0; k < 400; k++) { // a point inside the map, >= 20 px from every marker
+      const a = k * 2.399, rr = h * (0.15 + 0.6 * ((k * 0.618) % 1));
+      const x = r.width / 2 + rr * Math.cos(a), y = r.height / 2 + rr * Math.sin(a);
+      if (z.map.hits.every((m) => Math.hypot(m.x - x, m.y - y) > 20)) return { x, y };
+    }
+    return null;
+  }, what);
+  const u = await pf.evaluate((t) => window.zoner.mapDirAt(t.x, t.y), tgt);
+  await pf.mouse.dblclick(mb.x + tgt.x, mb.y + tgt.y);
+  await pf.waitForTimeout(700);
+  dbl[what] = await pf.evaluate(({ u, what }) => {
+    const z = window.zoner;
+    if (what === 'marker') return z.angleTo([1, 1, 0]);
+    const R = z.store.R(), d = [0, 1, 2].map((i) => R[3 * i] * u[0] + R[3 * i + 1] * u[1] + R[3 * i + 2] * u[2]);
+    return Math.acos(Math.min(1, d[2])) * 180 / Math.PI;
+  }, { u, what });
+}
+check('stereogram double-click: on a zone marker it snaps onto the zone; elsewhere the clicked direction ends on the beam',
+  dbl.marker < 0.01 && dbl.empty < 0.01, dbl);
+// global display range: the reference zone's phase range, per image mode; auto contrast off by default
+const gr = await pf.evaluate(() => {
+  const z = window.zoner, s = z.store;
+  s.loadCrystal('Si'); s.set('lateralRes', 0.5); s.set('thickness', 20); s.set('sliceDepth', 10);
+  const at = (mode, deg) => { s.p.imgMode = mode; s.setTilt(deg * Math.PI / 180, 0.4 * deg * Math.PI / 180); z.img.render();
+    return { range: z.img.range.slice(), own: z.img.imgRange.slice(), zone: z.img.refZone }; };
+  const r = { auto: s.p.imgAuto, sum0: at('sum', 0), sum3: at('sum', 3), slice0: at('slice', 0), slice3: at('slice', 3) };
+  s.p.imgMode = 'sum'; s.setTilt(0, 0);
+  return r;
+});
+const sp = (x) => x[1] - x[0];
+check('global display range (auto contrast off by default): on [110] it is the image\'s own range; 3° off the image keeps < 20% (sum) of it; slice has its own range',
+  gr.auto === false && gr.sum0.zone === '[110]' && Math.abs(sp(gr.sum0.own) / sp(gr.sum0.range) - 1) < 0.03 && Math.abs(sp(gr.slice0.own) / sp(gr.slice0.range) - 1) < 0.03
+  && sp(gr.sum3.range) === sp(gr.sum0.range) && sp(gr.sum3.own) < 0.2 * sp(gr.sum3.range) && sp(gr.slice3.own) < 0.6 * sp(gr.slice3.range)
+  && Math.abs(sp(gr.slice0.range) / sp(gr.sum0.range) - 1) > 0.2, gr);
+for (const [im, deg] of [['sum', 0], ['sum', 1], ['sum', 3], ['slice', 0], ['slice', 3]]) {
+  await pf.evaluate(({ im, deg }) => { const z = window.zoner, s = z.store; s.set('imgMode', im); s.setTilt(deg * Math.PI / 180, 0.4 * deg * Math.PI / 180); z.markAll(); }, { im, deg });
+  await pf.waitForTimeout(300);
+  await pf.locator('#panel-img').screenshot({ path: join(out, `global-${im}-${deg}deg-${mode}.png`) });
+}
+await pf.evaluate(() => { document.getElementById('ctl-imgAuto').closest('details').open = true; });
+await pf.locator('#ctl-imgAuto').check();
+await pf.waitForTimeout(300);
+const ga = await pf.evaluate(() => ({ auto: window.zoner.store.p.imgAuto, range: window.zoner.img.range.slice(), own: window.zoner.img.imgRange.slice() }));
+check('Auto contrast checkbox: back to stretching each image to its own range',
+  ga.auto && Math.abs(sp(ga.range) - sp(ga.own)) < 1e-9, ga);
+await pf.locator('#ctl-imgAuto').uncheck();
+await pf.evaluate(() => { const s = window.zoner.store; s.set('imgMode', 'sum'); s.setTilt(0, 0); window.zoner.markAll(); });
 await fresh.close();
 
 // mobile layout

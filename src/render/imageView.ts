@@ -1,13 +1,9 @@
-// Real-space phase image by Fourier synthesis of the slab-filtered crystal potential.
-// phi(x, y) = sigma * sum_g V_g * L(g_perp) * D(g_z) * exp(2 pi i g_perp . r), with
-//   depth sum : D = T sinc(T g_z) exp(-i pi g_z T)          (slab from depth 0 to T)
-//   MEP slice : D = dz sinc(dz g_z) exp(-2 pi^2 sz^2 g_z^2) exp(-2 pi i g_z z0)
-// Lab z points to the gun, so depth zeta is z = -zeta. Exact for a perfect crystal slab; this is
-// where tilt-induced column smearing (t tan(theta)) comes from.
+// Real-space phase image by Fourier synthesis of the slab-filtered crystal potential; the
+// coefficients come from physics/image.ts (imageCoefficients).
 import { Store } from '../ui/state';
 import { compile, uniforms, FULLSCREEN_VS, fullscreenVAO, DataTexture, FloatTarget, GLSL_FETCH, GLSL_COLORMAPS, COLORMAP_IDS, getGL, fitCanvas } from './gl';
-import { sigmaInteraction, VOLT_A2 } from '../physics/constants';
-import { lateralTransfer, sinc } from '../physics/transfer';
+import { imageCoefficients, referenceView } from '../physics/image';
+import { dirIdx } from '../physics/zones';
 import { overlay2D, fmt } from '../ui/util';
 
 const SYNTH_FS = `#version 300 es
@@ -44,7 +40,8 @@ void main() {
 
 const N_PIX = 256; // synthesis grid along the shorter side; the longer side follows the panel aspect
 const MAX_ASPECT = 2.5;
-const MAX_COEF = 4096;
+const REF_PIX = 256; // reference image grid
+const REF_FOV = 16; // A: several projected cells, sampled at 0.0625 A (finer than the display grid)
 
 export class ImageView {
   dirty = true;
@@ -60,7 +57,15 @@ export class ImageView {
   private readBuf = new Float32Array(Math.ceil(N_PIX * MAX_ASPECT) * N_PIX * 4);
   private nx = N_PIX;
   private ny = N_PIX;
+  /** display range (rad): the image's own min/max (auto) or the global reference range */
   range: [number, number] = [0, 1];
+  /** min/max of the image last rendered */
+  imgRange: [number, number] = [0, 1];
+  /** global display range per mode: the same image on the reference zone (cached per parameter set) */
+  private refTarget: FloatTarget;
+  private refBuf = new Float32Array(REF_PIX * REF_PIX * 4);
+  private refCache = new Map<string, [number, number]>();
+  refZone = '';
   nCoef = 0;
   lastMs = 0;
   /** last render time per mode (ms), for the info panel and benchmarks */
@@ -80,6 +85,8 @@ export class ImageView {
     this.coefTex = new DataTexture(gl);
     this.target = new FloatTarget(gl);
     this.target.resize(N_PIX, N_PIX);
+    this.refTarget = new FloatTarget(gl);
+    this.refTarget.resize(REF_PIX, REF_PIX);
     gl.bindTexture(gl.TEXTURE_2D, this.target.tex);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -87,44 +94,42 @@ export class ImageView {
 
   /** Fourier coefficients (lab frame): [gx, gy, amplitude (rad), phase]. Friedel halves, x2. */
   coefficients(): { data: Float32Array; n: number } {
-    const s = this.store, p = s.p;
-    const R = s.refl();
-    const rot = s.R();
-    const sig = sigmaInteraction(p.kV);
-    const vk = (VOLT_A2 / s.crystal.lattice.volume) * sig * 2;
-    const T = p.thickness * 10, dz = p.sliceThickness * 10, z0 = p.sliceDepth * 10;
-    const sz = (p.depthRes * 10) / 2.354820045;
-    const list: number[][] = [];
-    let amax = 0;
-    const mode = this.mode;
-    for (let i = 0; i < R.n; i++) {
-      const h = R.hkl[3 * i], k = R.hkl[3 * i + 1], l = R.hkl[3 * i + 2];
-      if (h < 0 || (h === 0 && (k < 0 || (k === 0 && l < 0)))) continue; // Friedel half
-      const gx = R.g[3 * i], gy = R.g[3 * i + 1], gzc = R.g[3 * i + 2];
-      const ax = rot[0] * gx + rot[1] * gy + rot[2] * gzc;
-      const ay = rot[3] * gx + rot[4] * gy + rot[5] * gzc;
-      const az = rot[6] * gx + rot[7] * gy + rot[8] * gzc;
-      const lat = lateralTransfer(Math.hypot(ax, ay), p.lateralRes);
-      if (lat < 1e-4) continue;
-      let dm: number, dph: number;
-      if (mode === 'sum') {
-        dm = T * sinc(T * az);
-        dph = -Math.PI * az * T;
-      } else {
-        dm = dz * sinc(dz * az) * Math.exp(-2 * Math.PI * Math.PI * sz * sz * az * az);
-        dph = -2 * Math.PI * az * z0;
-      }
-      const amp = vk * lat * dm;
-      const a = Math.abs(amp) * Math.hypot(R.Fre[i], R.Fim[i]);
-      if (a < 1e-7) continue;
-      const ph = Math.atan2(R.Fim[i], R.Fre[i]) + dph + (amp < 0 ? Math.PI : 0);
-      list.push([ax, ay, a, ph]);
-      amax = Math.max(amax, a);
+    const s = this.store;
+    return imageCoefficients(s.refl(), s.R(), s.crystal.lattice.volume, s.p.kV, s.transfer(this.mode));
+  }
+
+  /** Global display range for the current mode: min/max of the same image (same thickness,
+   *  resolutions and slice) with the reference zone exactly on the beam. Rendered with the same
+   *  shader into a small target, once per parameter set. */
+  referenceRange(): [number, number] {
+    const s = this.store, p = s.p, mode = this.mode;
+    const key = [mode, p.crystal, p.dw, p.kV, p.lateralRes, p.thickness, ...(mode === 'slice' ? [p.sliceThickness, p.sliceDepth, p.depthRes] : [])].join('|');
+    const hit = this.refCache.get(key);
+    const ref = referenceView(s.crystal);
+    this.refZone = `[${dirIdx(s.crystal.lattice, ref.zone).map((x) => (x < 0 ? `-${-x}` : `${x}`)).join('')}]`;
+    if (hit) return hit;
+    const gl = this.gl;
+    const { data, n } = imageCoefficients(s.refl(), ref.rot, s.crystal.lattice.volume, p.kV, s.transfer(mode));
+    this.coefTex.upload(data, Math.max(1, n));
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.refTarget.fbo);
+    gl.viewport(0, 0, REF_PIX, REF_PIX);
+    gl.useProgram(this.synth);
+    this.coefTex.bind(0, this.u1('uC'));
+    gl.uniform1i(this.u1('uN'), n);
+    gl.uniform2f(this.u1('uFov'), REF_FOV, REF_FOV);
+    gl.bindVertexArray(this.vao1);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.readPixels(0, 0, REF_PIX, REF_PIX, gl.RGBA, gl.FLOAT, this.refBuf);
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < this.refBuf.length; i += 4) {
+      const v = this.refBuf[i];
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
     }
-    const kept = list.filter((c) => c[2] > amax * 1e-4).sort((a, b) => b[2] - a[2]).slice(0, MAX_COEF);
-    const data = new Float32Array(4 * Math.max(1, kept.length));
-    kept.forEach((c, i) => data.set(c, 4 * i));
-    return { data, n: kept.length };
+    const r: [number, number] = hi > lo ? [lo, hi] : [lo - 1e-3, lo + 1e-3];
+    if (this.refCache.size > 64) this.refCache.clear();
+    this.refCache.set(key, r);
+    return r;
   }
 
   render() {
@@ -144,6 +149,8 @@ export class ImageView {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     }
     const fx = asp >= 1 ? p.imgFov * asp : p.imgFov, fy = asp >= 1 ? p.imgFov : p.imgFov / asp;
+    // global range first: it renders into its own target with the shared coefficient texture
+    const ref = p.imgAuto ? null : this.referenceRange();
     const { data, n } = this.coefficients();
     this.nCoef = n;
     this.coefTex.upload(data, Math.max(1, n));
@@ -155,16 +162,15 @@ export class ImageView {
     gl.uniform2f(this.u1('uFov'), fx, fy);
     gl.bindVertexArray(this.vao1);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-    if (p.imgAuto || this.range[1] <= this.range[0]) {
-      gl.readPixels(0, 0, nx, ny, gl.RGBA, gl.FLOAT, this.readBuf);
-      let lo = Infinity, hi = -Infinity;
-      for (let i = 0, m = 4 * nx * ny; i < m; i += 4) {
-        const v = this.readBuf[i];
-        if (v < lo) lo = v;
-        if (v > hi) hi = v;
-      }
-      this.range = hi > lo ? [lo, hi] : [lo - 1e-3, lo + 1e-3];
+    gl.readPixels(0, 0, nx, ny, gl.RGBA, gl.FLOAT, this.readBuf);
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0, m = 4 * nx * ny; i < m; i += 4) {
+      const v = this.readBuf[i];
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
     }
+    this.imgRange = [lo, hi];
+    this.range = ref ?? (hi > lo ? [lo, hi] : [lo - 1e-3, lo + 1e-3]);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, W, H);
     gl.useProgram(this.show);
@@ -201,8 +207,9 @@ export class ImageView {
     ctx.shadowBlur = 3;
     ctx.fillText(`${nice} Å`, 10, r.height - 18);
     ctx.textAlign = 'right';
-    const span = this.range[1] - this.range[0];
-    ctx.fillText(`${p.imgAuto ? 'auto' : 'locked'} ${fmt(span, span < 0.1 ? 3 : 2)} rad p-p`, r.width - 8, r.height - 10);
+    const span = this.range[1] - this.range[0], own = this.imgRange[1] - this.imgRange[0];
+    const f = (x: number) => fmt(x, x < 0.1 ? 3 : 2);
+    ctx.fillText(p.imgAuto ? `auto ${f(span)} rad p-p` : `image ${f(own)} of ${f(span)} rad p-p (${this.refZone} on zone)`, r.width - 8, r.height - 10);
     if (this.mode === 'slice') {
       ctx.textAlign = 'left';
       ctx.fillText(`z = ${fmt(p.sliceDepth, 1)} nm, Δz = ${fmt(p.sliceThickness, 1)} nm`, 8, 16);

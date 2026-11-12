@@ -304,7 +304,7 @@ describe('projected-resolution metric', () => {
   const R0 = buildReflections(al, 1 / 0.45, 300);
   const ZS = buildZoneSet(R0, enumerateZones(al.lattice, 3), 0.5);
   const zone = al.lattice.dirToCartUnit([0, 0, 1]);
-  const params = { lateralRes: 0.5, mode: 'slice' as const, sliceThickness: 5, depthRes: 0, totalThickness: 200 };
+  const params = { lateralRes: 0.5, mode: 'slice' as const, sliceThickness: 5, depthRes: 0, totalThickness: 200, sliceDepth: 100 };
   it('depth transfer is 1 at gz=0 and falls with gz', () => {
     expect(depthTransfer(0, params)).toBeCloseTo(1, 12);
     expect(depthTransfer(0.05, { ...params, mode: 'sum' })).toBeLessThan(0.5);

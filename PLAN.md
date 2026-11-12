@@ -4,23 +4,24 @@ Living plan for continuing work across sessions.
 
 - **Read §1 first** in a new session.
 - Keep §3 (next actions) prioritized.
-- Append to §10 (session log) whenever a chunk of work is committed.
+- Append to §11 (session log) whenever a chunk of work is committed. Releasing: §10.
 
 Related: [README.md](README.md) (use, physics summary, deploy).
 
 ---
 
-## 1. Start here (state at the end of session 2, 2026-11-11: version 0.0.2)
+## 1. Start here (state at the end of session 4, 2026-11-12: version 0.0.4, public on GitHub)
 
 | item | state |
 |------|-------|
-| version | `0.0.2` on `main` (tag `v0.0.2`, merged from `feat/session-2`; `v0.0.1` = session 1). No remote yet. History: [CHANGELOG.md](CHANGELOG.md) |
+| version | `0.0.4` on `main` (tag `v0.0.4`, merged from `feat/session-4`, which contains `feat/session-3`; no 0.0.3). Earlier: `v0.0.2`, `v0.0.1`. History: [CHANGELOG.md](CHANGELOG.md) |
+| public | repo https://github.com/chiahao3/zoner (public, remote `origin`, ssh); site https://chiahao3.github.io/zoner/ (GitHub Pages, deployed by Actions on every push to `main`); offline file https://chiahao3.github.io/zoner/zoner.html. Releasing: §10 |
 | stack | Vite 7 + TypeScript 5.9 + three.js 0.187, raw WebGL2 shaders; static site, no backend |
 | installed | npm packages only, local to `node_modules/` (see `package.json`): three, vite, vitest 3, typescript 5, vite-plugin-singlefile, playwright-core (drives the system `/usr/bin/google-chrome`; no browser download), @types/three. No conda env was created. Node 20.20 (nvm) was already present |
-| tests | `npm test`: 57 vitest tests (29 physics, 28 UI helpers/state) |
-| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 30/30 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
+| tests | `npm test`: 85 vitest tests (29 physics, 9 depth weight, 47 UI helpers/state) |
+| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 40/40 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
 | builds | `npm run build:pages` produces `dist/` (site) and `dist/zoner.html` (~650 kB single file, runs from `file://`) |
-| deploy | `.github/workflows/pages.yml` (test, build, deploy on push to `main`). Needs a GitHub repo + Pages source "GitHub Actions" (§2) |
+| deploy | `.github/workflows/pages.yml` (test, build, deploy on push to `main`); Pages source is "GitHub Actions" (set via the API at the first release, §10) |
 
 Commands:
 
@@ -34,10 +35,10 @@ node bench/e2e.mjs --swiftshader    # software GL, slow-device worst case
 
 ## 2. Human checklist (for the user)
 
-- [ ] Create the GitHub repo and push (not done by Claude: pushing publishes). For example:
-      `gh repo create zoner --public --source . --remote origin && git push -u origin main --tags`.
-      Then Settings → Pages → Source: GitHub Actions. Pages on a private repo needs a paid plan.
-- [ ] Pick a license (package.json says `UNLICENSED` for now). three.js is MIT. The Lobato
+- [x] Create the GitHub repo and push (done at 0.0.4 at the user's request: public
+      https://github.com/chiahao3/zoner, Pages on). Commits carry the user's git author email.
+- [ ] Pick a license (the repo is public now; without a license others may view it but have no
+      rights to reuse it) (package.json says `UNLICENSED` for now). three.js is MIT. The Lobato
       coefficients are published numbers (cited).
 - [ ] At the microscope: does the DP orientation and handedness match your camera? The app shows the
       pattern seen from the gun, with no camera rotation. A per-microscope rotation/flip setting is §3 P1.
@@ -65,8 +66,6 @@ node bench/e2e.mjs --swiftshader    # software GL, slow-device worst case
 - **P2 Absorption** (imaginary U'_g ≈ 0.1 U_g) for Bloch and two-beam, so thick-crystal contrast is
   less extreme.
 - **P2 Touch**: pinch zoom on the DP/map, larger touch targets for the "go" buttons.
-- **P2 MEP slice finite-thickness edges**: slices near the surfaces should see only crystal inside
-  [0, t]. The current synthesis assumes an infinite slab around the slice.
 - **P3 Missing-cone depth transfer** option (from α) instead of a Gaussian depth PSF.
 - **P3 Space-group tables** so CIFs with only a H-M symbol expand (now treated as P1, with a warning).
 
@@ -127,7 +126,7 @@ bench/e2e.mjs       headless Chrome: smoke, 23 checks, timings, screenshots (-> 
   pause: 61 beams take ~12 ms.
 - **Images by Fourier synthesis** (not atom splatting). Exact for a perfect slab, cost independent of
   thickness, and the same transfer function as the map, so the panels can't disagree.
-- **Resolution metric** (decided after two numerical failures, recorded in §10):
+- **Resolution metric** (decided after two numerical failures, recorded in §11):
   1. Global reflections with a 50% threshold: random high-index reflections inside the thin
      |g·n| shell gave a false 0.93 Å at a general orientation. Fixed by evaluating per low-index zone
      (index ≤ map setting), using only ZOLZ reflections. Regression test added.
@@ -178,6 +177,50 @@ bench/e2e.mjs       headless Chrome: smoke, 23 checks, timings, screenshots (-> 
 - **Tilt rings** (off by default since session 2b; hover gives the same number) measure the total tilt angle from the current beam (circles of radius tan(θ/2) on
   the beam-centred map), not |Δα|/|Δβ|, which are not concentric. The hover readout gives the
   holder α/β for any point, and the "go" table gives them for zones.
+- **Finite-specimen slice weight** (session 3, user request: thin specimens stay sharp when
+  tilted). The slice weight is w(ζ) = box_t(ζ)·(box_Δz ⊛ G)(ζ − z0): the reconstruction is
+  (V·box_t) ⊛ G, integrated over the slice window. The old closed form Δz·sinc·exp(−2π²σ²g²)
+  ignored box_t. w is held as uniform piecewise-linear runs (5 nodes per σ inside ±4σ of each
+  blurred edge, one segment where it is flat) and transformed exactly per segment, so there is no
+  aliasing at any g_z; the interpolant damps by sinc²(g h) (≤ 0.25% of the area, tested against the
+  old formula deep inside a 400 nm crystal). One depth transfer feeds the image, passWidth (map,
+  readout) and the zone cache (its key now includes the slice depth). Normalisation: the slice
+  amplitude is ∫w, so a slice whose blur reaches beyond the specimen holds only its share of the
+  potential (total over all slices conserved); a 200 nm PSF on a 0.5 nm specimen gives the depth
+  sum's shape at ~1% of its amplitude (auto contrast hides the scale). Measured: t = 0.5 nm,
+  Δz = 2 nm, depth 3 nm: smear-equivalent length 0.26 nm (was 1.67 nm), = the depth sum's.
+- **λ/α² checkbox** (session 3): Store-level (`depthAuto`, `syncAutoDepth`), so links and the
+  sidebar agree; a typed depthRes unchecks it. α → 0 caps at 1000 nm instead of ∞. Training sets
+  α = 0 directly on `p`, so it does not disturb the depth setting.
+- **Off-zone residual fringes in the depth sum: investigated, not changed** (session 3; the user
+  dropped it: in MEP the dominant blur is within the slice, and mis-tilt mainly hurts ADF-STEM via
+  dechanneling). Findings for the record (Si [110], 20 nm, rms phase over 20 Å):
+  tilt 0/2/3/5/8° → 1.63/0.47/0.09/0.20/0.12 rad. The residuals are low-index reflections (111,
+  220) in the sinc sidelobes of the sharp-walled slab (T g_z = −1.5 at 5°), i.e. partial planes
+  cut by the surfaces; they are 5–12% of the on-zone phase, and auto contrast stretches them.
+  Envelopes at realistic values barely help (5°: 2 nm surface roughness → 0.16 rad, 0.25° mosaic
+  spread → 0.13 rad and −18% on zone). Random amorphous layers (1 nm/side ≈ 0.1 rad rms, matched
+  Campbell's theorem) did break up the 3° and 8° fringes in a GPU prototype, but cost ~15× image
+  time on SwiftShader; reverted. The prototype is archived in
+  `~/scratch/zoner-bench/session3/amorphous-attempt/` (not in git). Frozen-phonon displacement was
+  judged minor (DW B is already in F_g).
+- **Session 4: collection angle and derived values.** `collAngle` is the half-width of a square
+  detector (user: "our detector is usually square, so collection angle would be the radius"); the
+  DP draws it aligned with the DP axes, since there is no camera rotation yet (§3 P1). All three
+  follow-the-source values (λ/α² depth, λ/β lateral, map range = DP) go through
+  `Store.syncDerived` with one rule: setting the derived value by hand ends the link. The map
+  range synced to the DP is asin(dpRange/K), the tilt whose Kikuchi centre sits at the DP edge
+  (`dirAtQ` uses sin); e2e: the [110] marker sits at the same fraction of the half-width in both
+  panels (0.5597 vs 0.5596). Angles shown in Å⁻¹ use θ·K, as the CBED disks do. DP hover angle =
+  asin(|q|/K), checked against the go table at a Kikuchi centre.
+- **Global display range** (session 4, last request). Auto contrast is off by default; each image
+  mode is shown on the range of the same image with `defaultZone` exactly on the beam (the zone
+  the crystal opens on), so the depth sum through 20 nm fades from 7.2 rad on [110] to 0.6 rad at
+  3° while the slice keeps half. One reference zone per crystal (not the nearest zone) keeps the
+  range fixed while tilting. Rendered on the GPU with the display's own shader (256 px over
+  16 Å, 0.0625 Å) so its extremes match the displayed image (on zone 7.215 vs 7.247 rad: 0.07%
+  of the range clips), cached per parameter set. Cost of a new reference: 2.2–2.5 ms GPU, 9–19 ms
+  SwiftShader, so a slice-depth drag on SwiftShader costs ~23 ms per frame instead of ~12.
 - **Links carry `v=2`.** Links without it are from 0.0.1; their `convAlpha` was the imaging
   aperture, so it is dropped and `dpIllum/dpAlpha` become the new α (unit-tested).
 
@@ -200,7 +243,7 @@ bench/e2e.mjs       headless Chrome: smoke, 23 checks, timings, screenshots (-> 
   page errors when the first render times out.
 - Headless GPU: `--use-angle=vulkan --enable-features=Vulkan --ignore-gpu-blocklist` gives the real
   NVIDIA renderer. Without these flags you get SwiftShader.
-- The repo sits on an sshfs mount (`/home/cl2696/altas`). Keep benchmark output and throwaway
+- The repo sits on an sshfs mount. Keep benchmark output and throwaway
   worktrees on local NVMe (`~/scratch`); `node_modules` can be symlinked into a worktree.
 - `FloatTarget.resize` resets texture filtering to NEAREST; set LINEAR again after resizing when the
   target is sampled for display (image view).
@@ -257,6 +300,41 @@ the DP slightly slower at α = 0. Per tilt frame, the total drops because one im
 two. The 3D numbers on SwiftShader swing 120–220 ms between runs (first-render geometry
 rebuilds), so they are not comparable row to row.
 
+### Session 3: finite-specimen slice weight, same machine, 1600×1000 window
+
+Median ms per re-render after a tilt; `main` (v0.0.2) rebuilt in a scratch worktree and run with
+its own e2e in the same session. CPU coefficient time (node, Si, 24k reflections): depth sum
+1.26 → 0.98 ms, slice 1.19 → 1.16 ms, lateral 0.3 Å slice 2.00 → 1.99 ms (the bound skips more).
+
+| scene | renderer | DP | map | depth sum | MEP slice | 3D |
+|---|---|---|---|---|---|---|
+| Si [110] default, v0.0.2 / session 3 | RTX 5000 | 2.4 / 2.4 | 2.9 / 2.4 | 2.7 / 3.0 | 3.4 / 2.8 | 6.6 / 6.1 |
+| Si lateral 0.3 Å, v0.0.2 / session 3 | RTX 5000 | 3.8 / 4.3 | 2.8 / 2.4 | 3.4 / 3.5 | 4.1 / 3.6 | 5.8 / 5.2 |
+| Si thin 0.5 nm slice (new row) | RTX 5000 | 2.5 | 3.0 | 3.1 | 3.2 | 5.0 |
+| Si [110] default, v0.0.2 / session 3 | SwiftShader | 25.5 / 40.9 | 104 / 97 | 21.8 / 24.5 | 9.6 / 10.1 | 124 / 224 |
+| Si lateral 0.3 Å, v0.0.2 / session 3 | SwiftShader | 36.5 / 40.0 | 102 / 105 | 30.9 / 32.3 | 8.3 / 7.4 | 117 / 124 |
+| Si thin 0.5 nm slice (new row) | SwiftShader | 40 | 304 | 75 | 72 | 40 |
+
+No change beyond noise (SwiftShader DP and 3D swing run to run, as in session 2). The thin row is
+slower on SwiftShader because a 0.5 nm specimen passes many more reflections (wide depth
+transfer); the depth sum, whose formula did not change, costs the same, so it is the specimen,
+not the new weight.
+
+### Session 4: same machine, 1600×1000 window
+
+Median ms per re-render after a tilt, session 3 tip vs session 4 (each run with its own e2e).
+
+| scene | renderer | DP | map | depth sum | MEP slice | 3D |
+|---|---|---|---|---|---|---|
+| Si [110] default, s3 / s4 | RTX 5000 | 2.4 / 2.4 | 2.5 / 2.6 | 2.7 / 2.9 | 2.8 / 2.8 | 6.6 / 7.1 |
+| Si λ/β (64 mrad → 0.308 Å) (new) | RTX 5000 | 2.9 | 2.4 | 3.1 | 3.6 | 4.9 |
+| Si detector on, map synced (new) | RTX 5000 | 3.6 | 2.4 | 3.5 | 4.7 | 5.8 |
+| Si [110] default, s3 / s4 | SwiftShader | 40.9 / 26.7 | 96.6 / 100 | 24.5 / 23.3 | 10.1 / 11.0 | 224 / 225 |
+| Si λ/β (64 mrad → 0.308 Å) (new) | SwiftShader | 34.3 | 99.5 | 33.2 | 7.5 | 129 |
+| Si detector on, map synced (new) | SwiftShader | 38.1 | 98.7 | 21.2 | 5.3 | 126 |
+
+No change on existing rows beyond noise. λ/β costs what its finer lateral resolution costs.
+
 ## 9. Compatibility matrix
 
 Session 2: "parallel" means α = 0 or disks smaller than the spot size; "convergent" means
@@ -274,6 +352,13 @@ disks drawn (α > 0 and big enough at the current zoom).
 | holder range switch | works | works | works | works | works | works |
 | training | works (forced α = 0) | n/a | works | works | works | works (touch drag; no keys) |
 | CIF without symops | n/a | n/a | n/a | treated as P1, with a toast warning | n/a | n/a |
+| finite-specimen slice weight | works | works | works | works | works | works |
+| λ/β auto lateral | β = 0 → 5 Å cap | works | works | works | slower: finer lateral → more reflections (capped 40k) | works |
+| square detector (DP) | works | works | works | works | works | works (no hover on touch) |
+| DP hover readout | works | works | works | works | works | n/a on touch |
+| map FOV synced to DP | works | works | works | works | works | works |
+| global image display range | works | works | works (reference [2-1-10]) | works (reference: defaultZone, [110] or [001]) | works | works |
+| λ/α² auto depth | α = 0 → 1000 nm cap (slice ≈ depth sum) | works | works | works | works | works |
 | offline single file | works | works | works | works | works | works |
 | 0.0.1 links / saved state | migrated (v=2 marker) | migrated (dpAlpha → α) | n/a | n/a | n/a | n/a |
 
@@ -281,7 +366,35 @@ Layout verified without scrolling at 1920×1080, 1600×1000, 1366×768 and 1280�
 windows shorter than ~650 px on desktop (panels get small but still fit), Safari/iOS WebGL2 (should work, since WebGL2 + EXT_color_buffer_float are standard);
 real microscope camera orientations (§2).
 
-## 10. Session log
+## 10. Releasing a version (GitHub + Pages)
+
+The public site updates by itself on every push to `main` (the Pages workflow tests, builds and
+deploys), so a release is: finish on a branch, bump, merge, tag, push, verify. Push only when the
+user asks for a release; pushing publishes.
+
+1. On the feature branch: `npm test` and `node bench/e2e.mjs --gpu` (and `--swiftshader`) pass, 0
+   console errors.
+2. Bump: `npm version X.Y.Z --no-git-tag-version` (package.json + package-lock.json). In
+   CHANGELOG.md, rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD` and open a new empty
+   `[Unreleased]` above it. Update §1 here. Commit ("Release X.Y.Z: version bump and changelog").
+3. Merge: `git checkout main && git merge --no-ff feat/<branch> -m "Merge feat/<branch>: zoner X.Y.Z"`,
+   then `git tag -a vX.Y.Z -m "zoner X.Y.Z"`.
+4. Push: `git push origin main && git push origin vX.Y.Z` (remote `origin` =
+   git@github.com:chiahao3/zoner.git). Feature branches stay local unless asked.
+5. Watch the deploy: `gh run list --workflow pages.yml -L 1`, then `gh run watch <id> --exit-status`
+   and, on failure, `gh run view <id> --log-failed`. Done only when the run is green.
+6. Verify the live site: `curl -sI https://chiahao3.github.io/zoner/` (200) and that the served JS is
+   the new build (the asset name in the live `index.html` matches `dist/index.html`). Pages can lag a
+   minute behind a green run. Optionally run the e2e against it:
+   `node bench/e2e.mjs --gpu --url https://chiahao3.github.io/zoner/`.
+7. Optional: `gh release create vX.Y.Z --title "zoner X.Y.Z" --notes-file <changelog section>`
+   with `dist/zoner.html` attached for offline PCs.
+
+One-time setup (already done at 0.0.4): `gh repo create zoner --public --source . --remote origin`,
+then enable Pages with the Actions source:
+`gh api -X POST repos/chiahao3/zoner/pages -f build_type=workflow`.
+
+## 11. Session log
 
 - **2026-11-11, session 1.** Repo created (`main` = scaffold; work on `feat/v1-app`).
   - Physics core written test-first (26, then 29 tests). Extinction distances validated (§8).
@@ -318,3 +431,31 @@ real microscope camera orientations (§2).
   - Fourth round: clearer holder range on the map (outline, red stripes, red-ringed markers);
     zone labels follow the index limit. 57 unit tests, 30/30 e2e on GPU and SwiftShader.
   - Marked 0.0.2, merged `feat/session-2` into `main` (`--no-ff`), tagged `v0.0.2`.
+- **2026-11-12, session 3** (`feat/session-3`). Requested: finite-specimen MEP slice, off-zone
+  periodicity in the depth sum, λ/α² checkbox.
+  - Image coefficients moved to `physics/image.ts`; new `tests/depth.test.ts` (9, test-first).
+  - Slice weight cut to the specimen (§5): thin specimens keep their tilt tolerance in slice mode;
+    deep slices unchanged; CPU cost equal or lower.
+  - λ/α² checkbox (7 tests, test-first; the session-2b "no estimate buttons" test narrowed to
+    λ/2α).
+  - Off-zone periodicity: numerical study (§5), amorphous-layer GPU prototype built and then
+    reverted at the user's request; nothing of it is in git.
+  - 73 unit tests; e2e 32/32 on GPU and SwiftShader, 0 console errors; timings vs v0.0.2 (§8).
+- **2026-11-12, session 4** (`feat/session-4`, branched from `feat/session-3`). Requested:
+  collection angle (90 mrad, later 64), detector toggle on the DP, Å⁻¹ next to the angle fields, DP hover
+  readout, λ/β checkbox, map FOV synced to the DP; mid-session: the detector is square, β = its
+  half-width.
+  - 9 unit tests first (82 total); 5 e2e checks (37/37 on GPU and SwiftShader, 0 console
+    errors). Found by screenshots: the Å⁻¹ text was clipped in the sidebar (now two lines, with an
+    e2e clip check), and the hover printed "-0.00".
+  - Last request: global display range per image mode (auto contrast off by default). 3 more
+    unit tests (85), 2 more e2e checks (39/39 on GPU and SwiftShader, 0 console errors).
+  - Follow-ups: DP illumination/detector labels moved to the top right (they overlapped the
+    hover), hover on two lines; collection angle default 64 mrad (3.25 Å⁻¹, λ/β 0.308 Å).
+  - Bug report (stereogram double-click off target, zone snap lost): reproduced in headless Chrome
+    (double-click on the [110] marker ended 0.32° off; 0.16° at a 10° map range). Cause: click,
+    click, dblclick; the first click started the snap animation and the dblclick re-read the
+    half-rotated map. Pre-existing since 0.0.1, not the display range. Fixed by recording the
+    first click's meaning; e2e regression check (40/40 on GPU and SwiftShader).
+  - Released 0.0.4: merged `feat/session-4` into `main`, tagged, first push to the public repo,
+    Pages enabled (§10 records the steps).

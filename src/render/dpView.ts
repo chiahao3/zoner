@@ -13,6 +13,7 @@ import { Vec3, normalize, matVec, transpose, overlay2D, fmt, cssVar, DEG } from 
 import { rotationAtoB } from '../physics/orientation';
 import { nearestZones, dirIdx, planeIdx } from '../physics/zones';
 import { drawIdx } from './label';
+import { mradToInvA } from '../ui/layout';
 
 const SPOT_VS = `#version 300 es
 layout(location=0) in vec2 a_corner;
@@ -411,6 +412,9 @@ export class DPView {
     this.lastMs = performance.now() - t0;
   }
 
+  /** detector drawn in the last frame (square half-width in 1/A, edge in view?), null when off */
+  detector: { rq: number; visible: boolean } | null = null;
+
   private drawOverlay() {
     const s = this.store, p = s.p;
     const ctx = overlay2D(this.over);
@@ -479,6 +483,47 @@ export class DPView {
         ctx.stroke();
       }
     }
+    // detector range: a square detector centred on the optic axis, half-width = the collection
+    // angle (corners at sqrt(2) beta), aligned with the DP axes (no camera rotation yet); beyond it
+    // dimmed with red stripes (the holder-range look of the stereogram)
+    this.detector = null;
+    if (p.dpDetector) {
+      const rq = mradToInvA(p.collAngle, p.kV);
+      const cx = X(0), cy = Y(0), rd = rq * sc;
+      // the edge is in view unless the square covers the whole panel
+      const visible = cx - rd > 0 || cx + rd < r.width || cy - rd > 0 || cy + rd < r.height;
+      this.detector = { rq, visible };
+      const txt = `detector ±${fmt(p.collAngle, p.collAngle < 10 ? 1 : 0)} mrad (±${fmt(rq, rq < 1 ? 3 : 2)} Å⁻¹)`; // ± = square half-width
+      ctx.save();
+      if (visible) {
+        const outside = new Path2D();
+        outside.rect(0, 0, r.width, r.height);
+        outside.rect(cx - rd, cy - rd, 2 * rd, 2 * rd);
+        ctx.fillStyle = 'rgba(6, 8, 12, 0.55)';
+        ctx.fill(outside, 'evenodd');
+        ctx.clip(outside, 'evenodd');
+        ctx.strokeStyle = 'rgba(220, 60, 56, 0.6)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let k = -r.height; k < r.width; k += 10) {
+          ctx.moveTo(k, r.height);
+          ctx.lineTo(k + r.height, 0);
+        }
+        ctx.stroke();
+        ctx.restore();
+        ctx.save();
+        ctx.strokeStyle = '#ff5a52';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(cx - rd, cy - rd, 2 * rd, 2 * rd);
+      }
+      ctx.fillStyle = '#ffb4ae';
+      ctx.textAlign = 'right'; // upper right, under the illumination line: the hover box is top left
+      ctx.shadowColor = '#000';
+      ctx.shadowBlur = 3;
+      ctx.fillText(txt, r.width - 8, 32);
+      if (!visible) ctx.fillText('beyond the view: zoom out', r.width - 8, 46);
+      ctx.restore();
+    }
     // scale bar: a round number of 1/A, also in mrad
     const target = (r.width * 0.22) / sc;
     const nice = [0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10].reduce((a, b) => (Math.abs(b - target) < Math.abs(a - target) ? b : a));
@@ -491,8 +536,8 @@ export class DPView {
     ctx.stroke();
     ctx.textAlign = 'left';
     ctx.fillText(`${nice} Å⁻¹ = ${fmt(nice * s.lambda * 1e3, 1)} mrad`, 12, r.height - 20);
-    ctx.textAlign = 'left';
-    ctx.fillText(this.cbed ? `CBED α ${fmt(p.convAlpha, 1)} mrad` : p.convAlpha > 0 ? `α ${fmt(p.convAlpha, 1)} mrad: disks < spot size, drawn as spots` : 'parallel beam', 8, 16);
+    ctx.textAlign = 'right'; // upper right: the hover readout sits top left
+    ctx.fillText(this.cbed ? `CBED α ${fmt(p.convAlpha, 1)} mrad` : p.convAlpha > 0 ? `α ${fmt(p.convAlpha, 1)} mrad: disks < spot size, drawn as spots` : 'parallel beam', r.width - 8, 16);
     const st = this.blochStatus();
     if (st) {
       ctx.textAlign = 'right';

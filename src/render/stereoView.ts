@@ -291,7 +291,7 @@ export class StereoView {
     const tp = s.transfer(p.imgMode);
     const zs = s.zoneSet();
     const [db, dwst] = this.dRange();
-    const okey = `${p.crystal}|${p.dw}|${p.kV}|${p.lateralRes}|${p.imgMode}|${p.sliceThickness}|${p.depthRes}|${p.thickness}|${p.mapZoneIdx}`;
+    const okey = `${p.crystal}|${p.dw}|${p.kV}|${p.lateralRes}|${p.imgMode}|${p.sliceThickness}|${p.sliceDepth}|${p.depthRes}|${p.thickness}|${p.mapZoneIdx}`;
     if (okey !== this.onZoneKey) {
       this.onZone.clear();
       this.onZoneKey = okey;
@@ -396,7 +396,7 @@ export class StereoView {
       ctx.textAlign = 'right';
       ctx.fillText(`${fmt(db, 2)} Å`, bx + bw, by - 3);
       ctx.textAlign = 'left';
-      ctx.fillText(`±${p.mapRange}°  ${p.imgMode === 'sum' ? 'depth sum' : 'MEP slice'}`, 8, r.height - 10);
+      ctx.fillText(`±${+p.mapRange.toFixed(p.mapRange < 10 ? 2 : 1)}°${p.mapSyncDP ? ' (= DP)' : ''}  ${p.imgMode === 'sum' ? 'depth sum' : 'MEP slice'}`, 8, r.height - 10);
       if (p.enforceLimits) {
         const t = `holder range α ±${p.alphaLim}° β ±${p.betaLim}°`;
         ctx.shadowBlur = 0;

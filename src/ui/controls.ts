@@ -1,5 +1,6 @@
 // Sidebar parameter controls generated from a schema; two-way bound to the store.
-import { Store, Params } from './state';
+import { Store, Params, DEPTH_RES_MAX, LATERAL_RES_MAX } from './state';
+import { angleUnitText } from './layout';
 import { el } from './util';
 
 type Opt = string | [string, string];
@@ -13,6 +14,10 @@ interface Ctl {
   unit?: string;
   options?: Opt[];
   title?: string;
+  /** inline checkbox that fills this value automatically (unchecked when the value is typed) */
+  auto?: { key: keyof Params; label: string; title?: string };
+  /** unit text computed from the parameters (replaces unit next to the field), e.g. mrad (0.15 1/A) */
+  derived?: (p: Params) => string;
 }
 interface Group {
   name: string;
@@ -28,7 +33,8 @@ export const GROUPS: Group[] = [
     ctls: [
       { key: 'kV', label: 'High tension', type: 'select', unit: 'kV', options: ['60', '80', '120', '200', '300'] },
       { key: 'thickness', label: 'Thickness t', type: 'number', min: 0.5, max: 500, step: 0.5, unit: 'nm' },
-      { key: 'convAlpha', label: 'Convergence α', type: 'number', min: 0, max: 60, step: 0.5, unit: 'mrad', title: 'Probe semi-angle. 0 = parallel beam (SAED spots). Disks are drawn as CBED once they are larger than the spot size, otherwise as spots. ' },
+      { key: 'convAlpha', label: 'Convergence α', type: 'number', min: 0, max: 60, step: 0.5, unit: 'mrad', derived: (p) => angleUnitText(p.convAlpha, p.kV), title: 'Probe semi-angle (typed in mrad; the reciprocal distance is shown in brackets). 0 = parallel beam (SAED spots). Disks are drawn as CBED once they are larger than the spot size, otherwise as spots.' },
+      { key: 'collAngle', label: 'Collection angle β', type: 'number', min: 0, max: 500, step: 1, unit: 'mrad', derived: (p) => angleUnitText(p.collAngle, p.kV), title: 'Collection angle of the square detector: centre to edge (the corners reach √2 β). Typed in mrad; the reciprocal distance is shown in brackets. Detector in the diffraction panel draws this range; λ/β next to the lateral resolution uses it.' },
       { key: 'dw', label: 'Debye-Waller B', type: 'number', min: 0, max: 3, step: 0.05, unit: 'Å²' },
     ],
   },
@@ -36,18 +42,20 @@ export const GROUPS: Group[] = [
     name: 'MEP / imaging', open: true,
     ctls: [
       {
-        key: 'lateralRes', label: 'Lateral resolution', type: 'number', min: 0.1, max: 5, step: 0.05, unit: 'Å',
+        key: 'lateralRes', label: 'Lateral resolution', type: 'number', min: 0.05, max: LATERAL_RES_MAX, step: 0.05, unit: 'Å',
         title: 'FWHM of the lateral PSF; also the |g| cut-off of the resolution map',
+        auto: { key: 'lateralAuto', label: 'λ/β', title: 'Fill the lateral resolution with λ/β from the high tension and the collection angle β (kept updated). Typing a value unchecks it. β = 0 gives the maximum.' },
       },
       {
-        key: 'depthRes', label: 'Depth resolution', type: 'number', min: 0, max: 100, step: 0.1, unit: 'nm',
+        key: 'depthRes', label: 'Depth resolution', type: 'number', min: 0, max: DEPTH_RES_MAX, step: 0.1, unit: 'nm',
         title: 'FWHM of the depth PSF of a reconstructed slice',
+        auto: { key: 'depthAuto', label: 'λ/α²', title: 'Fill the depth resolution with λ/α² from the high tension and the convergence angle α (kept updated). Typing a value unchecks it. α = 0 gives the maximum (no depth sectioning).' },
       },
       { key: 'sliceThickness', label: 'Slice thickness Δz', type: 'number', min: 0.1, max: 100, step: 0.1, unit: 'nm' },
       { key: 'sliceDepth', label: 'Slice depth z', type: 'range', min: 0, max: 20, step: 0.1, unit: 'nm', title: 'centre of the displayed MEP slice below the entrance surface' },
       { key: 'imgFov', label: 'Image field of view', type: 'number', min: 4, max: 200, step: 1, unit: 'Å' },
       { key: 'imgCmap', label: 'Image colormap', type: 'select', options: CMAPS },
-      { key: 'imgAuto', label: 'Auto contrast', type: 'check', title: 'off = keep the current phase range, so contrast loss on tilting is visible' },
+      { key: 'imgAuto', label: 'Auto contrast', type: 'check', title: 'On: stretch each image to its own min/max. Off (default): a global display range per image mode, the phase range of the same image exactly on the crystal\'s low-index zone, so a mistilted crystal shows its real loss of contrast.' },
     ],
   },
   {
@@ -98,6 +106,7 @@ const NUMERIC_SELECT = new Set<keyof Params>(['kV', 'mapRange']);
 
 export class Controls {
   private inputs = new Map<keyof Params, HTMLInputElement | HTMLSelectElement>();
+  private ctls = new Map<keyof Params, Ctl>();
   private outs = new Map<keyof Params, HTMLElement>();
   constructor(private store: Store, root: HTMLElement) {
     for (const g of GROUPS) {
@@ -112,6 +121,7 @@ export class Controls {
 
   private row(c: Ctl): HTMLElement {
     const s = this.store;
+    this.ctls.set(c.key, c);
     const id = `ctl-${c.key}`;
     const row = el('div', { class: `row row-${c.type}` });
     if (c.title) row.title = c.title;
@@ -150,9 +160,38 @@ export class Controls {
       this.outs.set(c.key, out);
       wrap.append(out);
     }
+    if (c.auto) {
+      const ak = c.auto.key;
+      const cb = el('input', { id: `ctl-${ak}`, type: 'checkbox' });
+      cb.addEventListener('change', () => s.set(ak, cb.checked as never));
+      const lb = el('label', { class: 'auto', for: `ctl-${ak}` }, cb, c.auto.label);
+      if (c.auto.title) lb.title = c.auto.title;
+      this.inputs.set(ak, cb);
+      wrap.append(lb);
+    }
     row.append(wrap);
     if (c.unit) row.dataset.unit = c.unit;
     return row;
+  }
+
+  /** Select a value; one that is not among the options (a map range synced to the DP) gets its
+   *  own temporary option, removed again once a listed value is chosen. */
+  private selectValue(sel: HTMLSelectElement, k: keyof Params, v: string) {
+    const listed = [...sel.options].some((o) => !o.dataset.dyn && o.value === v);
+    let dyn = sel.querySelector<HTMLOptionElement>('option[data-dyn]');
+    if (listed) dyn?.remove();
+    else {
+      if (!dyn) {
+        dyn = el('option', {});
+        dyn.dataset.dyn = '1';
+        sel.prepend(dyn);
+      }
+      const unit = this.ctls.get(k)?.unit ?? '';
+      const n = parseFloat(v);
+      dyn.value = v;
+      dyn.textContent = (Number.isFinite(n) ? `${+n.toFixed(n < 10 ? 2 : 1)}` : v) + (unit ? ` ${unit}` : '') + (k === 'mapRange' && this.store.p.mapSyncDP ? ' (DP)' : '');
+    }
+    sel.value = v;
   }
 
   refresh() {
@@ -160,12 +199,18 @@ export class Controls {
     for (const [k, inp] of this.inputs) {
       const v = p[k];
       if (inp instanceof HTMLInputElement && inp.type === 'checkbox') inp.checked = !!v;
-      else if (document.activeElement !== inp) inp.value = String(v);
+      else if (document.activeElement !== inp) {
+        if (inp instanceof HTMLSelectElement) this.selectValue(inp, k, String(v));
+        else inp.value = String(v);
+      }
       if (k === 'sliceDepth' && inp instanceof HTMLInputElement) inp.max = String(p.thickness);
       const out = this.outs.get(k);
       if (out) {
         const unit = inp.closest('.row')?.getAttribute('data-unit') ?? '';
-        out.textContent = (inp as HTMLInputElement).type === 'range' ? `${v} ${unit}` : unit;
+        const d = this.ctls.get(k)?.derived;
+        // derived text goes on two lines (unit, then the bracket) so it fits the narrow column
+        out.textContent = (inp as HTMLInputElement).type === 'range' ? `${v} ${unit}` : d ? d(p).replace(' (', '\n(') : unit;
+        out.classList.toggle('derived', !!d);
       }
     }
   }
