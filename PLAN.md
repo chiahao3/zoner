@@ -14,7 +14,7 @@ Related: [README.md](README.md) (use, physics summary, deploy).
 
 | item | state |
 |------|-------|
-| version | `0.0.4` on `main` (tag `v0.0.4`, merged from `feat/session-4`, which contains `feat/session-3`; no 0.0.3). Earlier: `v0.0.2`, `v0.0.1`. History: [CHANGELOG.md](CHANGELOG.md) |
+| version | `0.0.4` on `main` (tag `v0.0.4`, merged from `feat/session-4`, which contains `feat/session-3`). `v0.0.3` marks the end of session 3 (`94d2455`, tagged afterwards; its package.json reads 0.0.2). Earlier: `v0.0.2`, `v0.0.1`. History: [CHANGELOG.md](CHANGELOG.md) |
 | public | repo https://github.com/chiahao3/zoner (public, remote `origin`, ssh); site https://chiahao3.github.io/zoner/ (GitHub Pages, deployed by Actions on every push to `main`); offline file https://chiahao3.github.io/zoner/zoner.html. Releasing: §10 |
 | stack | Vite 7 + TypeScript 5.9 + three.js 0.187, raw WebGL2 shaders; static site, no backend |
 | installed | npm packages only, local to `node_modules/` (see `package.json`): three, vite, vitest 3, typescript 5, vite-plugin-singlefile, playwright-core (drives the system `/usr/bin/google-chrome`; no browser download), @types/three. No conda env was created. Node 20.20 (nvm) was already present |
@@ -458,4 +458,5 @@ then enable Pages with the Actions source:
     half-rotated map. Pre-existing since 0.0.1, not the display range. Fixed by recording the
     first click's meaning; e2e regression check (40/40 on GPU and SwiftShader).
   - Released 0.0.4: merged `feat/session-4` into `main`, tagged, first push to the public repo,
-    Pages enabled (§10 records the steps).
+    Pages enabled (§10 records the steps). Then tagged `v0.0.3` at the session-3 tip (`94d2455`)
+    for completeness and split the changelog into 0.0.3 and 0.0.4.
