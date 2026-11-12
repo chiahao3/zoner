@@ -427,7 +427,7 @@ export class DPView {
     const L = s.crystal.lattice;
     ctx.font = '11px ui-monospace, monospace';
     ctx.textAlign = 'center';
-    if (p.dpLabels && !document.body.classList.contains('training')) {
+    if (p.dpLabels) {
       const lab = this.labels.sort((a, b) => b[2] - a[2]).slice(0, 28);
       ctx.fillStyle = 'rgba(255,220,120,0.85)';
       for (const [qx, qy, , i] of lab) {
@@ -439,7 +439,7 @@ export class DPView {
     // nearest zone axis: Kikuchi centre at q = -K d_xy, and the Laue circle of its ZOLZ
     const bc = s.beamCrystal();
     const near = nearestZones(bc, s.zones(), 1, s.zones()[Math.min(s.zones().length - 1, 40)].len)[0];
-    if (near && !document.body.classList.contains('training-nohint')) {
+    if (near) {
       const d = matVec(s.R(), near.zone.dir);
       const qx = -s.K * d[0], qy = -s.K * d[1];
       ctx.strokeStyle = accent;

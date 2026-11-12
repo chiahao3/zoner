@@ -2,7 +2,6 @@ import './style.css';
 import { Store } from './ui/state';
 import { Controls } from './ui/controls';
 import { attachPointer } from './ui/input';
-import { Trainer, LEVELS, Level } from './ui/training';
 import { encodeHash, decodeHash } from './ui/hash';
 import { DPView } from './render/dpView';
 import { ImageView } from './render/imageView';
@@ -27,7 +26,6 @@ function panel(id: string, title: string, tools: HTMLElement[] = [], kind: 'gl' 
   const stage = el('div', { class: 'stage' });
   if (kind === 'gl') {
     stage.append(el('canvas', { class: 'gl', id: `${id}-gl` }), el('canvas', { class: 'ov', id: `${id}-ov` }), el('div', { class: 'lbl', id: `${id}-lbl` }));
-    stage.append(el('div', { class: 'veil', text: 'hidden in training' }));
   }
   const p = el('section', { class: `panel panel-${id}`, id: `panel-${id}` }, ph, stage);
   return p;
@@ -142,10 +140,6 @@ syncBtn.onclick = () => store.set('mapSyncDP', !store.p.mapSyncDP);
 detBtn.onclick = () => store.set('dpDetector', !store.p.dpDetector);
 let infoDirty = true;
 
-const trainer = new Trainer(store, () => {
-  renderTrainingUI();
-  infoDirty = true;
-});
 
 // ---------------------------------------------------------------------------------------------
 // state -> views
@@ -157,20 +151,17 @@ let hashTimer = 0;
 store.subscribe((kinds) => {
   markAll();
   syncHolderBox();
-  if (kinds.has('orientation')) trainer.check();
   if (kinds.has('params') || kinds.has('crystal')) {
     controls.refresh();
     syncImgTools();
 syncHolderBox();
   }
   if (kinds.has('crystal')) syncCrystalSelect();
-  if (!trainer.active) {
-    clearTimeout(hashTimer);
-    hashTimer = window.setTimeout(() => {
-      history.replaceState(null, '', encodeHash(store));
-      saveLocal();
-    }, 300);
-  }
+  clearTimeout(hashTimer);
+  hashTimer = window.setTimeout(() => {
+    history.replaceState(null, '', encodeHash(store));
+    saveLocal();
+  }, 300);
 });
 dp.onNeedRender = () => (infoDirty = true);
 new ResizeObserver(markAll).observe(grid);
@@ -253,7 +244,7 @@ function tiltReadout(u: Vec3, extra: string, thDeg: number) {
 // beam in deg, mrad and 1/A, which is also the scattering angle of a spot there) and its alpha/beta
 const dpLbl = $('dp-lbl');
 $('dp-ov').addEventListener('pointermove', (e) => {
-  if (e.buttons || trainer.active) {
+  if (e.buttons) {
     dpLbl.innerHTML = '';
     return;
   }
@@ -269,7 +260,7 @@ $('dp-ov').addEventListener('pointerleave', () => (dpLbl.innerHTML = ''));
 // direction under the pointer onto the beam (DOM text, so no map re-render on hover)
 const mapLbl = $('map-lbl');
 $('map-ov').addEventListener('pointermove', (e) => {
-  if (e.buttons || trainer.active) {
+  if (e.buttons) {
     mapLbl.innerHTML = '';
     return;
   }
@@ -323,8 +314,6 @@ window.addEventListener('keydown', (e) => {
     case 'e': case 'E': store.rotateInPlane(-step); break;
     case 'z': case 'Z': goNearest(); break;
     case '0': store.setTilt(0, 0); break;
-    case 't': case 'T': trainer.active ? trainer.stop() : trainer.begin(trainer.level); break;
-    case 'h': case 'H': if (trainer.active) trainer.toggleHint(); break;
     case 'l': case 'L':
       swIn.checked = !store.p.enforceLimits;
       swIn.dispatchEvent(new Event('change'));
@@ -377,7 +366,7 @@ const nearestList = (k: number) =>
   nearestZones(store.beamCrystal(), store.zones().filter((z) => Math.max(...z.uvw.map(Math.abs)) <= store.p.mapZoneIdx), k);
 
 // ---------------------------------------------------------------------------------------------
-// header: crystal, CIF, zone entry, training, theme, share
+// header: crystal, CIF, zone entry, theme, share
 const sel = $<HTMLSelectElement>('crystal');
 function syncCrystalSelect() {
   sel.innerHTML = '';
@@ -429,7 +418,6 @@ $<HTMLInputElement>('zone').addEventListener('keydown', (e) => {
   e.stopPropagation();
   if (e.key === 'Enter') $('tilt-btn').click();
 });
-$('train-btn').onclick = () => (trainer.active ? trainer.stop() : trainer.begin(trainer.level));
 $('help-btn').onclick = () => ($('help') as HTMLDialogElement).showModal();
 $('theme-btn').onclick = () => {
   const cur = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
@@ -469,31 +457,6 @@ function renderInfo() {
   const info = $('info');
   const a = s.holder.alpha / DEG, b = s.holder.beta / DEG;
   const lim = (v: number, l: number) => (p.enforceLimits && Math.abs(v) >= l - 1e-6 ? ' lim' : '');
-  if (trainer.active) {
-    const lvl = LEVELS[trainer.level];
-    info.innerHTML = `
-      <div class="train">
-        <div class="big">${trainer.solved ? '✔ ' : ''}${trainer.status()}</div>
-        <div class="muted">${lvl.label}</div>
-        <div class="tiltrow"><span>α ${fmt(a, 2)}°</span><span>β ${fmt(b, 2)}°</span></div>
-        <div class="muted">Tilt with arrow keys or drag the pattern until a zone axis is on the optic axis.
-        Bands crossing symmetrically at the centre = on zone.</div>
-        <div class="row-btns">
-          ${(Object.keys(LEVELS) as Level[]).map((l) => `<button class="mini lvl${l === trainer.level ? ' on' : ''}" data-l="${l}">${l}</button>`).join('')}
-          <button class="mini" id="t-new">new (T to quit)</button>
-          <button class="mini" id="t-hint">${trainer.hint ? 'hide hint' : 'hint (H)'}</button>
-        </div>
-        <div class="muted">Best: ${(Object.keys(LEVELS) as Level[]).map((l) => `${l} ${Number.isFinite(trainer.best(l)) ? trainer.best(l).toFixed(1) + ' s' : '—'}`).join(' · ')}</div>
-        ${trainer.solved ? `<div class="ok">Zone ${htmlDir(L, trainer.solved.zone.uvw)} reached. Press "new" for another.</div>` : ''}
-      </div>`;
-    info.querySelectorAll<HTMLButtonElement>('.lvl').forEach((bt) => (bt.onclick = () => trainer.begin(bt.dataset.l as Level)));
-    $('t-new').onclick = () => trainer.begin(trainer.level);
-    $('t-hint').onclick = () => {
-      trainer.toggleHint();
-      infoDirty = true;
-    };
-    return;
-  }
   const bc = s.beamCrystal();
   const uvw = L.cartToDir(bc);
   const mx = Math.max(...uvw.map(Math.abs));
@@ -526,10 +489,6 @@ function renderInfo() {
     <div class="kv muted"><span>λ = ${fmt(s.lambda * 100, 3)} pm · K = ${fmt(s.K, 2)} Å⁻¹ · ${R.n} reflections (|g| ≤ ${fmt(R.gmax, 2)} Å⁻¹)</span></div>
     <div class="kv muted"><span>${dp.blochStatus() || 'frame ms'}</span><span>DP ${fmt(dp.lastMs, 1)} · map ${fmt(map.lastMs, 1)} · image ${fmt(img.lastMs, 1)} · 3D ${fmt(r3d.lastMs, 1)}</span></div>`;
   info.querySelectorAll<HTMLButtonElement>('.go').forEach((bt) => (bt.onclick = () => animateToDir(near[+bt.dataset.i!].zone.dir)));
-}
-function renderTrainingUI() {
-  $('train-btn').classList.toggle('on', trainer.active);
-  markAll();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -590,14 +549,9 @@ syncHolderBox();
 // everything is redrawn when the interaction ends.
 const lastAt = new Map<object, number>();
 function frame() {
-  const hidden = trainer.active;
   const now = performance.now();
   for (const v of views) {
     if (!v.dirty) continue;
-    if (hidden && v !== dp) {
-      v.dirty = false;
-      continue;
-    }
     if (store.interacting && v !== dp && v.lastMs > 30 && now - (lastAt.get(v) ?? 0) < 3 * v.lastMs) continue;
     lastAt.set(v, now);
     try {
@@ -607,7 +561,7 @@ function frame() {
       v.dirty = false;
     }
   }
-  if (infoDirty || trainer.active) renderInfo();
+  if (infoDirty) renderInfo();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
@@ -615,7 +569,7 @@ requestAnimationFrame(frame);
 // for benchmarks / automation
 const zoneLab = (uvw: Vec3) => matVec(store.R(), store.crystal.lattice.dirToCartUnit(uvw));
 (window as unknown as Record<string, unknown>).zoner = {
-  store, dp, map, r3d, img, trainer, markAll,
+  store, dp, map, r3d, img, markAll,
   /** Kikuchi-pattern centre of zone uvw in the DP (1/A) */
   kc: (uvw: Vec3) => {
     const d = zoneLab(uvw);

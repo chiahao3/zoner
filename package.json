@@ -1,6 +1,6 @@
 {
   "name": "zoner",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "private": true,
   "description": "Browser tool for tilting crystals to zone axes: synced real-space view, diffraction pattern, MEP-style images and a resolution stereogram.",
   "type": "module",

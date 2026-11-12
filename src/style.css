@@ -136,9 +136,6 @@ body.norail #rail { display: none; }
 .lbl .hover { position: absolute; left: 8px; top: 6px; font: 11px ui-monospace, monospace; color: #fff; text-shadow: 0 0 3px #000; background: rgba(0, 0, 0, 0.45); padding: 2px 6px; border-radius: 5px; }
 .lbl .hover.out { color: #fca5a5; }
 #dp-lbl .hover { max-width: calc(100% - 150px); } /* DP: the illumination and detector lines sit top right */
-.veil { display: none; position: absolute; inset: 0; background: var(--panel2); color: var(--muted); align-items: center; justify-content: center; font-size: 12px; }
-body.training .panel:not(.panel-dp):not(.panel-info) .veil { display: flex; }
-body.training .legend, body.training .lbl .hover { display: none; }
 .panel-info .stage { background: var(--panel); overflow: auto; }
 #info { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
 .tiltrow { display: flex; gap: 14px; flex-wrap: wrap; align-items: baseline; font-size: 14px; }
@@ -160,8 +157,6 @@ table.zones td { padding: 2px 4px; }
 table.zones tr.out td { color: var(--warn); }
 .kv { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
 .kv.muted { font-size: 11px; }
-.train .big { font-size: 26px; font-weight: 700; color: var(--accent); }
-.train .ok { color: var(--ok); font-weight: 600; }
 .row-btns { display: flex; gap: 4px; flex-wrap: wrap; }
 
 #toast {
