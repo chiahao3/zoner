@@ -51,6 +51,17 @@ export function fmtIdx(ix: number[]): string {
   const parts = ix.map((x) => (x < 0 ? `${-x}\u0305` : `${x}`));
   return compact ? parts.join('') : parts.join(' ');
 }
+/** Index list to display (four-index for hexagonal lattices). */
+export const dirIdx = (L: Lattice, uvw: Vec3) => (L.isHexagonal ? toFourIndexDir(uvw) : uvw.map((x) => x + 0));
+export const planeIdx = (L: Lattice, hkl: Vec3) => (L.isHexagonal ? toFourIndexPlane(hkl) : hkl.map((x) => x + 0));
+
+/** HTML with overlines for negative indices. */
+export function htmlIdx(ix: number[], open = '[', close = ']'): string {
+  const sep = ix.every((x) => Math.abs(x) < 10) ? '' : ' ';
+  return open + ix.map((x) => (x < 0 ? `<span class="ob">${-x}</span>` : `${x}`)).join(sep) + close;
+}
+export const htmlDir = (L: Lattice, uvw: Vec3) => htmlIdx(dirIdx(L, uvw));
+
 export function fmtDir(L: Lattice, uvw: Vec3): string {
   return L.isHexagonal ? `[${fmtIdx(toFourIndexDir(uvw))}]` : `[${fmtIdx(uvw)}]`;
 }

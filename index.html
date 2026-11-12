@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>zoner: tilt to zone</title>
+    <meta name="description" content="Interactive crystal tilting aid for the electron microscope: synced real-space view, diffraction pattern, MEP-style images and a resolution stereogram." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23111827'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%234cc9f0'/%3E%3Cg fill='%23e5e7eb'%3E%3Ccircle cx='8' cy='16' r='2'/%3E%3Ccircle cx='24' cy='16' r='2'/%3E%3Ccircle cx='16' cy='8' r='2'/%3E%3Ccircle cx='16' cy='24' r='2'/%3E%3Ccircle cx='8' cy='8' r='1.4'/%3E%3Ccircle cx='24' cy='24' r='1.4'/%3E%3Ccircle cx='8' cy='24' r='1.4'/%3E%3Ccircle cx='24' cy='8' r='1.4'/%3E%3C/g%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <header>
+      <button id="side-btn" class="icon" title="show / hide settings">☰</button>
+      <span class="brand">zoner</span>
+      <label class="hgrp">Crystal <select id="crystal"></select></label>
+      <button id="cif-btn" title="load a CIF (or drop one anywhere on the page)">CIF…</button>
+      <input id="cif-file" type="file" accept=".cif,text/plain" hidden />
+      <span class="hgrp zonebox">
+        <input id="zone" value="110" size="7" title="zone axis [uvw] (or [UVTW] for hexagonal)" />
+        <button id="tilt-btn" title="tilt the holder to this zone (Enter)">Tilt to</button>
+        <button id="mount-btn" title="re-mount the crystal so this zone is on the beam at α = β = 0">Mount</button>
+      </span>
+      <span id="cinfo" class="muted cinfo"></span>
+      <span class="spacer"></span>
+      <button id="train-btn" title="training mode (T)">Training</button>
+      <button id="share-btn" title="copy a link that restores this orientation and settings">Link</button>
+      <button id="theme-btn" class="icon" title="light / dark">◐</button>
+      <button id="help-btn" class="icon" title="help (?)">?</button>
+    </header>
+    <div id="app">
+      <aside id="side"></aside>
+      <main id="grid"></main>
+    </div>
+    <div id="toast"></div>
+    <dialog id="help">
+      <h2>zoner</h2>
+      <p>One tilt state drives every panel. Tilt with the mouse in any panel or with the keyboard.</p>
+      <table>
+        <tr><td>← → ↑ ↓</td><td>tilt β / α by the step (the pattern moves the way of the arrow). Shift ×5, Alt ×0.2</td></tr>
+        <tr><td>Q / E</td><td>rotate the specimen in plane</td></tr>
+        <tr><td>Z / double-click DP</td><td>go to the nearest zone axis</td></tr>
+        <tr><td>0</td><td>α = β = 0</td></tr>
+        <tr><td>T / H</td><td>training mode / hint</td></tr>
+        <tr><td>Diffraction</td><td>drag: the Kikuchi pattern follows the pointer; Shift-drag: in-plane rotation; right-drag: pan; wheel: camera length</td></tr>
+        <tr><td>Stereogram</td><td>drag: grab the map; click a zone marker or double-click a spot to tilt there; wheel: range</td></tr>
+        <tr><td>Real space / images</td><td>drag: trackball tilt; right-drag (3D): orbit the camera only; wheel: zoom</td></tr>
+      </table>
+      <h3>What is drawn</h3>
+      <ul>
+        <li><b>Diffraction</b>: reflections at their excitation error s<sub>g</sub> (beam along −z). Kinematic, per-reflection two-beam (default), or many-beam Bloch wave computed when you stop moving. Convergent mode evaluates the rocking curve across every disk, so HOLZ lines and K-M fringes appear. Kikuchi bands are drawn for the strongest planes; the arrow points to the nearest zone-axis centre.</li>
+        <li><b>Depth sum / MEP slice</b>: phase σ∫V dz by Fourier synthesis of the perfect-crystal potential, each reflection weighted by t·sinc(t g<sub>z</sub>) (slice: Δz·sinc(Δz g<sub>z</sub>) and a Gaussian depth PSF) and a Gaussian lateral PSF. Tilt smears columns by t·tanθ.</li>
+        <li><b>Resolution stereogram</b>: centred on the beam. Colour = finest 2D lattice still resolved if you tilted there: two non-collinear reflections with |g| ≤ 1/(lateral resolution) whose depth transfer stays ≥ 0.5. Grey = only 1D fringes. Hatched = beyond the holder limits.</li>
+        <li><b>Real space</b>: the specimen slab with slice boundaries and the current MEP slice highlighted, or a unit-cell cluster.</li>
+      </ul>
+      <p class="muted">Qualitative tool: feature positions and symmetry are right; intensities are approximate (no absorption, perfect crystal).</p>
+      <form method="dialog"><button>Close</button></form>
+    </dialog>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

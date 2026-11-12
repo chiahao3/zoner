@@ -5,12 +5,12 @@ import { Lattice } from '../src/physics/lattice';
 import { builtinCrystal } from '../src/physics/crystal';
 import { structureFactor, buildReflections, extinctionDistance } from '../src/physics/structure';
 import { Holder, tiltToBring, mountForZone } from '../src/physics/orientation';
-import { matVec, transpose, norm, dot, angleBetween } from '../src/physics/linalg';
+import { matVec, transpose, norm, dot, angleBetween, normalize } from '../src/physics/linalg';
 import { enumerateZones, nearestZones, toFourIndexDir } from '../src/physics/zones';
 import { twoBeamIntensity, kinematicIntensity, excitationError } from '../src/physics/diffraction';
 import { blochIntensities } from '../src/physics/bloch';
 import { symmetricEigen } from '../src/physics/eigen';
-import { resolution2D, depthTransfer } from '../src/physics/transfer';
+import { resolution2D, depthTransfer, buildZoneSet } from '../src/physics/transfer';
 import { stereoForward, stereoInverse } from '../src/physics/stereo';
 
 const DEG = Math.PI / 180;
@@ -302,14 +302,21 @@ describe('Bloch wave', () => {
 describe('projected-resolution metric', () => {
   const al = builtinCrystal('Al');
   const R0 = buildReflections(al, 1 / 0.45, 300);
+  const ZS = buildZoneSet(R0, enumerateZones(al.lattice, 3), 0.5);
   const zone = al.lattice.dirToCartUnit([0, 0, 1]);
   const params = { lateralRes: 0.5, mode: 'slice' as const, sliceThickness: 5, depthRes: 0, totalThickness: 200 };
   it('depth transfer is 1 at gz=0 and falls with gz', () => {
     expect(depthTransfer(0, params)).toBeCloseTo(1, 12);
     expect(depthTransfer(0.05, { ...params, mode: 'sum' })).toBeLessThan(0.5);
   });
+  it('zone set holds only ZOLZ reflections of each zone (one sign per zone)', () => {
+    const z001 = ZS.zones.find((z) => z.uvw.join(',') === '0,0,1' || z.uvw.join(',') === '0,0,-1')!;
+    expect(z001).toBeDefined();
+    for (const i of z001.refl) expect(R0.hkl[3 * i + 2]).toBe(0);
+    expect(ZS.zones.filter((z) => z.uvw.join(',') === '0,0,-1' || z.uvw.join(',') === '0,0,1').length).toBe(1);
+  });
   it('on zone the 2D resolution approaches the lateral limit', () => {
-    const r = resolution2D(R0, zone, params);
+    const r = resolution2D(R0, zone, params, ZS);
     expect(r.d).toBeGreaterThanOrEqual(0.5 - 1e-9);
     expect(r.d).toBeLessThan(0.65);
   });
@@ -317,12 +324,29 @@ describe('projected-resolution metric', () => {
     const sum = { ...params, mode: 'sum' as const };
     const at = (deg: number) => {
       const n = [Math.sin(deg * DEG), 0, Math.cos(deg * DEG)];
-      return resolution2D(R0, n, sum).d;
+      return resolution2D(R0, n, sum, ZS).d;
     };
     expect(at(0)).toBeLessThan(at(0.5));
     expect(at(0.5)).toBeLessThanOrEqual(at(2));
     // column smear picture: a fringe d is lost once T*tan(theta) exceeds ~d
     expect(at(1)).toBeGreaterThan(0.4 * 200 * Math.tan(1 * DEG));
+  });
+  it('off zone the depth-sum resolution matches the column smear t*tan(theta)', () => {
+    // same FWHM-equivalent criterion as the lateral limit: d = smear width, not 2x it
+    const sum = { ...params, mode: 'sum' as const };
+    for (const deg of [0.3, 0.5]) {
+      const n = [Math.sin(deg * DEG), Math.sin(0.4 * deg * DEG), Math.cos(deg * DEG)];
+      const d = resolution2D(R0, normalize(n), sum, ZS).d;
+      const smear = 200 * Math.tan(Math.hypot(1, 0.4) * deg * DEG);
+      expect(d / smear).toBeGreaterThan(0.75);
+      expect(d / smear).toBeLessThan(1.3);
+    }
+  });
+  it('a general orientation far from low-index zones shows no fine 2D lattice', () => {
+    // regression: random high-index reflections inside the thin |g.n| shell used to fake ~0.6 A
+    const thick = { ...params, sliceThickness: 20, depthRes: 50 };
+    const n = normalize([0.31, 0.57, 0.76]);
+    expect(resolution2D(R0, n, thick, ZS).d).toBeGreaterThan(2);
   });
 });
 
