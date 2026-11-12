@@ -10,11 +10,11 @@ Related: [README.md](README.md) (use, physics summary, deploy).
 
 ---
 
-## 1. Start here (state at the end of session 2, 2026-11-11)
+## 1. Start here (state at the end of session 2, 2026-11-11: version 0.0.2)
 
 | item | state |
 |------|-------|
-| version | `0.0.1` on `main` (tag `v0.0.1`, merged from `feat/v1-app`). Session 2 work is on `feat/session-2` (not merged; becomes 0.0.2). No remote yet. History: [CHANGELOG.md](CHANGELOG.md) |
+| version | `0.0.2` on `main` (tag `v0.0.2`, merged from `feat/session-2`; `v0.0.1` = session 1). No remote yet. History: [CHANGELOG.md](CHANGELOG.md) |
 | stack | Vite 7 + TypeScript 5.9 + three.js 0.187, raw WebGL2 shaders; static site, no backend |
 | installed | npm packages only, local to `node_modules/` (see `package.json`): three, vite, vitest 3, typescript 5, vite-plugin-singlefile, playwright-core (drives the system `/usr/bin/google-chrome`; no browser download), @types/three. No conda env was created. Node 20.20 (nvm) was already present |
 | tests | `npm test`: 57 vitest tests (29 physics, 28 UI helpers/state) |
@@ -37,7 +37,6 @@ node bench/e2e.mjs --swiftshader    # software GL, slow-device worst case
 - [ ] Create the GitHub repo and push (not done by Claude: pushing publishes). For example:
       `gh repo create zoner --public --source . --remote origin && git push -u origin main --tags`.
       Then Settings → Pages → Source: GitHub Actions. Pages on a private repo needs a paid plan.
-- [ ] Review `feat/session-2` (2×2 layout, single α, rings, legend, holder switch) and ask for the merge (→ 0.0.2).
 - [ ] Pick a license (package.json says `UNLICENSED` for now). three.js is MIT. The Lobato
       coefficients are published numbers (cited).
 - [ ] At the microscope: does the DP orientation and handedness match your camera? The app shows the
@@ -318,3 +317,4 @@ real microscope camera orientations (§2).
     54 unit tests, 28/28 e2e on GPU and SwiftShader.
   - Fourth round: clearer holder range on the map (outline, red stripes, red-ringed markers);
     zone labels follow the index limit. 57 unit tests, 30/30 e2e on GPU and SwiftShader.
+  - Marked 0.0.2, merged `feat/session-2` into `main` (`--no-ff`), tagged `v0.0.2`.

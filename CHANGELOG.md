@@ -5,7 +5,9 @@ versions follow [SemVer](https://semver.org/) (0.0.x while the UI is still movin
 
 ## [Unreleased]
 
-Session 2 (branch `feat/session-2`; becomes 0.0.2 when merged).
+## [0.0.2] - 2026-11-11
+
+Session 2 (merged from `feat/session-2`).
 
 ### Changed
 - Workspace is a 2×2 grid that always fits the window (no page scroll on desktop): diffraction
