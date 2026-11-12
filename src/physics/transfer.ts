@@ -14,6 +14,7 @@ export interface TransferParams {
   sliceThickness: number; // A
   depthRes: number; // A, FWHM of the depth PSF (0 = none)
   totalThickness: number; // A
+  sliceDepth: number; // A, centre of the slice below the entrance surface
 }
 
 const FWHM2SIG = 1 / 2.354820045;

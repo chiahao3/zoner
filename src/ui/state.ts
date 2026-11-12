@@ -240,6 +240,7 @@ export class Store {
       sliceThickness: this.p.sliceThickness * 10,
       depthRes: this.p.depthRes * 10,
       totalThickness: this.p.thickness * 10,
+      sliceDepth: this.p.sliceDepth * 10,
     };
   }
   /** Reflections for DP, images and map: up to the larger of the DP view and the lateral limit. */
