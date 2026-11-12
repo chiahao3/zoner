@@ -89,8 +89,8 @@ export const GROUPS: Group[] = [
   {
     name: 'Holder',
     ctls: [
-      { key: 'alphaLim', label: 'α limit', type: 'number', min: 1, max: 90, step: 1, unit: '°' },
-      { key: 'betaLim', label: 'β limit', type: 'number', min: 1, max: 90, step: 1, unit: '°' },
+      { key: 'alphaLim', label: 'α range ±', type: 'number', min: 1, max: 90, step: 1, unit: '°', title: 'Symmetric limit: α can go from −value to +value (35 means −35° … +35°, 70° of travel)' },
+      { key: 'betaLim', label: 'β range ±', type: 'number', min: 1, max: 90, step: 1, unit: '°', title: 'Symmetric limit: β can go from −value to +value (30 means −30° … +30°, 60° of travel)' },
       { key: 'enforceLimits', label: 'Enforce limits', type: 'check' },
       { key: 'step', label: 'Arrow-key step', type: 'number', min: 0.01, max: 5, step: 0.01, unit: '°' },
     ],

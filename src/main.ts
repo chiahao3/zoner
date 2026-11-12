@@ -34,24 +34,44 @@ function panel(id: string, title: string, tools: HTMLElement[] = [], kind: 'gl' 
 const btn = (text: string, title = '', cls = 'mini') => el('button', { class: cls, text, title });
 
 const v3dBtns = [btn('Beam', 'look down the beam'), btn('Side', 'look across the beam'), btn('Oblique')];
+// real-space image: one panel, depth sum or MEP slice (segmented toggle), slice depth in the header
+const imgBtns = { sum: btn('Depth sum', 'projected phase of the whole thickness'), slice: btn('MEP slice', 'one reconstructed slice') };
+const zRange = el('input', { type: 'range', id: 'img-z', min: '0', max: '20', step: '0.1', title: 'slice depth z below the entrance surface (nm)' });
+const zOut = el('span', { class: 'unit', id: 'img-z-out' });
+const zWrap = el('span', { class: 'zwrap' }, zRange, zOut);
+const seg = el('span', { class: 'seg' }, imgBtns.sum, imgBtns.slice);
+// 2x2 workspace: diffraction space on the left (DP, stereogram), real space on the right
+// (structure model, image); orientation info in the right-hand rail.
 const grid = $('grid');
 grid.append(
   panel('dp', 'Diffraction'),
+  panel('r3d', 'Crystal model', v3dBtns),
   panel('map', 'Resolution stereogram'),
-  panel('r3d', 'Real space', v3dBtns),
-  panel('sum', 'Depth sum (projected phase)'),
-  panel('slice', 'MEP slice'),
-  panel('info', 'Orientation', [], 'html'),
+  panel('img', 'Real-space image', [zWrap, seg]),
 );
+$('rail').append(panel('info', 'Orientation', [], 'html'));
 $('panel-info').querySelector('.stage')!.append(el('div', { id: 'info' }));
+$('panel-r3d').querySelector('.stage')!.append(el('div', { class: 'legend', id: 'r3d-legend' }));
 const controls = new Controls(store, $('side'));
 
 const dp = new DPView(store, $('dp-gl'), $('dp-ov'));
 const map = new StereoView(store, $('map-gl'), $('map-ov'));
 const r3d = new CrystalView(store, $('r3d-gl'), $('r3d-lbl'));
-const imSum = new ImageView(store, 'sum', $('sum-gl'), $('sum-ov'));
-const imSlice = new ImageView(store, 'slice', $('slice-gl'), $('slice-ov'));
-const views = [dp, map, r3d, imSum, imSlice];
+const img = new ImageView(store, $('img-gl'), $('img-ov'));
+const views = [dp, map, r3d, img];
+imgBtns.sum.onclick = () => store.set('imgMode', 'sum');
+imgBtns.slice.onclick = () => store.set('imgMode', 'slice');
+zRange.addEventListener('input', () => store.set('sliceDepth', +(zRange as HTMLInputElement).value));
+function syncImgTools() {
+  const p = store.p;
+  imgBtns.sum.classList.toggle('on', p.imgMode === 'sum');
+  imgBtns.slice.classList.toggle('on', p.imgMode === 'slice');
+  zWrap.style.display = p.imgMode === 'slice' ? '' : 'none';
+  const zr = zRange as HTMLInputElement;
+  zr.max = String(p.thickness);
+  if (document.activeElement !== zr) zr.value = String(p.sliceDepth);
+  zOut.textContent = `z ${fmt(p.sliceDepth, 1)} nm`;
+}
 let infoDirty = true;
 
 const trainer = new Trainer(store, () => {
@@ -69,7 +89,10 @@ let hashTimer = 0;
 store.subscribe((kinds) => {
   markAll();
   if (kinds.has('orientation')) trainer.check();
-  if (kinds.has('params') || kinds.has('crystal')) controls.refresh();
+  if (kinds.has('params') || kinds.has('crystal')) {
+    controls.refresh();
+    syncImgTools();
+  }
   if (kinds.has('crystal')) syncCrystalSelect();
   if (!trainer.active) {
     clearTimeout(hashTimer);
@@ -81,6 +104,7 @@ store.subscribe((kinds) => {
 });
 dp.onNeedRender = () => (infoDirty = true);
 new ResizeObserver(markAll).observe(grid);
+new ResizeObserver(markAll).observe($('rail'));
 
 // ---------------------------------------------------------------------------------------------
 // interaction
@@ -126,6 +150,28 @@ attachPointer($('map-ov'), store, {
   },
 }, endInteraction);
 
+// stereogram pointer readout: total tilt from the beam, and the alpha/beta that would bring the
+// direction under the pointer onto the beam (DOM text, so no map re-render on hover)
+const mapLbl = $('map-lbl');
+$('map-ov').addEventListener('pointermove', (e) => {
+  if (e.buttons || trainer.active) {
+    mapLbl.innerHTML = '';
+    return;
+  }
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const P = map.toP(e.clientX - r.left, e.clientY - r.top);
+  if (P[0] ** 2 + P[1] ** 2 >= 1) {
+    mapLbl.innerHTML = '';
+    return;
+  }
+  const th = 2 * Math.atan(Math.hypot(P[0], P[1]));
+  const t = tiltToBring(store.holder.mount, map.crystalDirAt(P));
+  const p = store.p;
+  const out = Math.abs(t.alpha) > p.alphaLim * DEG || Math.abs(t.beta) > p.betaLim * DEG;
+  mapLbl.innerHTML = `<div class="hover${out ? ' out' : ''}">${fmt(th / DEG, 1)}° from beam · α ${fmt(t.alpha / DEG, 1)}° β ${fmt(t.beta / DEG, 1)}°${out ? ' (beyond range)' : ''}</div>`;
+});
+$('map-ov').addEventListener('pointerleave', () => (mapLbl.innerHTML = ''));
+
 /** Trackball: the object follows the pointer (screen y up). */
 const trackball = (x: number, y: number, px: number, py: number) => {
   const dx = x - px, dy = -(y - py);
@@ -140,11 +186,10 @@ attachPointer($('r3d-ov'), store, {
     r3d.dirty = true;
   },
 }, endInteraction);
-for (const id of ['sum', 'slice'])
-  attachPointer($(`${id}-ov`), store, {
-    onDrag: trackball,
-    onWheel: (dy) => store.set('imgFov', Math.round(Math.min(200, Math.max(4, store.p.imgFov * Math.exp(dy * 0.001))))),
-  }, endInteraction);
+attachPointer($('img-ov'), store, {
+  onDrag: trackball,
+  onWheel: (dy) => store.set('imgFov', Math.round(Math.min(200, Math.max(4, store.p.imgFov * Math.exp(dy * 0.001))))),
+}, endInteraction);
 v3dBtns[0].onclick = () => r3d.setView('beam');
 v3dBtns[1].onclick = () => r3d.setView('side');
 v3dBtns[2].onclick = () => r3d.setView('oblique');
@@ -204,7 +249,7 @@ function animateToDir(u: Vec3) {
   const t = tiltToBring(store.holder.mount, u);
   const p = store.p;
   if (p.enforceLimits && (Math.abs(t.alpha) > p.alphaLim * DEG || Math.abs(t.beta) > p.betaLim * DEG))
-    toast(`Needs α ${fmt(t.alpha / DEG, 2)}°, β ${fmt(t.beta / DEG, 2)}°: beyond the holder limits (±${p.alphaLim}°, ±${p.betaLim}°). Stopped at the limit.`);
+    toast(`Needs α ${fmt(t.alpha / DEG, 2)}°, β ${fmt(t.beta / DEG, 2)}°: beyond the holder range (α −${p.alphaLim}…+${p.alphaLim}°, β −${p.betaLim}…+${p.betaLim}°). Stopped at the limit.`);
   animateTo(t.alpha, t.beta);
 }
 function goNearest() {
@@ -288,6 +333,7 @@ $('share-btn').onclick = async () => {
   }
 };
 $('side-btn').onclick = () => document.body.classList.toggle('noside');
+$('rail-btn').onclick = () => document.body.classList.toggle('norail');
 
 function toast(msg: string) {
   const t = $('toast');
@@ -346,6 +392,7 @@ function renderInfo() {
   info.innerHTML = `
     <div class="tiltrow"><span class="${lim(a, p.alphaLim)}">α <b>${fmt(a, 2)}°</b></span><span class="${lim(b, p.betaLim)}">β <b>${fmt(b, 2)}°</b></span>
     <span class="muted">beam ∥ [${uvw.map((x) => fmt(x / mx, 3)).join(' ')}]</span></div>
+    <div class="limrow muted">holder range: α −${p.alphaLim}° … +${p.alphaLim}°, β −${p.betaLim}° … +${p.betaLim}°${p.enforceLimits ? '' : ' (not enforced)'}</div>
     <table class="zones"><thead><tr><th>zone</th><th>off</th><th>α</th><th>β</th><th></th></tr></thead><tbody>
     ${near.map((n, i) => {
       const t = tiltToBring(s.holder.mount, n.zone.dir);
@@ -358,7 +405,7 @@ function renderInfo() {
     <div class="kv"><span>2D resolution, depth sum</span><b>${fmtD(rt)}</b></div>
     <div class="kv"><span>column smear (nearest zone): slice / total</span><b>${fmt(dzEff * 10 * Math.tan(th), 2)} / ${fmt(p.thickness * 10 * Math.tan(th), 2)} Å</b></div>
     <div class="kv muted"><span>λ = ${fmt(s.lambda * 100, 3)} pm · K = ${fmt(s.K, 2)} Å⁻¹ · ${R.n} reflections (|g| ≤ ${fmt(R.gmax, 2)} Å⁻¹)</span></div>
-    <div class="kv muted"><span>${dp.blochStatus() || 'frame ms'}</span><span>DP ${fmt(dp.lastMs, 1)} · map ${fmt(map.lastMs, 1)} · sum ${fmt(imSum.lastMs, 1)} · slice ${fmt(imSlice.lastMs, 1)} · 3D ${fmt(r3d.lastMs, 1)}</span></div>`;
+    <div class="kv muted"><span>${dp.blochStatus() || 'frame ms'}</span><span>DP ${fmt(dp.lastMs, 1)} · map ${fmt(map.lastMs, 1)} · image ${fmt(img.lastMs, 1)} · 3D ${fmt(r3d.lastMs, 1)}</span></div>`;
   info.querySelectorAll<HTMLButtonElement>('.go').forEach((bt) => (bt.onclick = () => animateToDir(near[+bt.dataset.i!].zone.dir)));
 }
 function renderTrainingUI() {
@@ -414,6 +461,7 @@ function restore() {
 restore();
 syncCrystalSelect();
 controls.refresh();
+syncImgTools();
 
 // ---------------------------------------------------------------------------------------------
 // render loop
@@ -447,7 +495,7 @@ requestAnimationFrame(frame);
 // for benchmarks / automation
 const zoneLab = (uvw: Vec3) => matVec(store.R(), store.crystal.lattice.dirToCartUnit(uvw));
 (window as unknown as Record<string, unknown>).zoner = {
-  store, dp, map, r3d, imSum, imSlice, trainer, markAll,
+  store, dp, map, r3d, img, trainer, markAll,
   /** Kikuchi-pattern centre of zone uvw in the DP (1/A) */
   kc: (uvw: Vec3) => {
     const d = zoneLab(uvw);

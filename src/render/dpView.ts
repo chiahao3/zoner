@@ -399,7 +399,7 @@ export class DPView {
     // auto: gamma for separated CBED disks, log for SAED and for overlapping (Ronchigram-like) disks
     let gmin = Infinity;
     for (let i = 0; i < R.n; i++) if (R.allowed[i]) { gmin = R.gabs[i]; break; }
-    const overlap = cbed && 2 * rd > 0.9 * gmin;
+    const overlap = cbed && 2 * rd > gmin; // disks actually overlap (Ronchigram-like)
     gl.uniform1i(c('uDisp'), p.dpDisplay === 'gamma' || (p.dpDisplay === 'auto' && cbed && !overlap) ? 1 : 0);
     gl.uniform1f(c('uLw'), Math.max(1.2 / scalePx, 0.004));
     gl.uniform2f(c('uRes'), W, H);

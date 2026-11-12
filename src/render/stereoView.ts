@@ -9,6 +9,7 @@ import { Mat3, Vec3, matVec, transpose, normalize, cross, overlay2D, fmt, DEG, c
 import { rotationAtoB } from '../physics/orientation';
 import { dirIdx, Zone } from '../physics/zones';
 import { drawIdx } from './label';
+import { ringAngles } from '../ui/layout';
 import { zoneCutAngle, passWidth, resolution2D, TAU } from '../physics/transfer';
 
 const FS = `#version 300 es
@@ -91,6 +92,8 @@ export class StereoView {
   lastMs = 0;
   /** screen positions of drawn zone markers, for click-to-go */
   hits: { x: number; y: number; zone: Zone }[] = [];
+  /** tilt-ring angles (deg) drawn in the last frame */
+  rings: number[] = [];
   lowRes = false;
   private onZone = new Map<string, number>();
   private onZoneKey = '';
@@ -229,6 +232,42 @@ export class StereoView {
         }
         ctx.stroke();
       }
+    }
+
+    // tilt rings: total tilt from the current beam direction (radius tan(theta/2) on the map)
+    this.rings = [];
+    if (!training) {
+      const h = Math.min(r.width, r.height) / 2;
+      const cornerP = (edge * Math.hypot(r.width, r.height)) / 2 / h;
+      const maxDeg = (2 * Math.atan(cornerP)) / DEG;
+      const cx = r.width / 2, cy = r.height / 2;
+      ctx.save();
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 5]);
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'left';
+      for (const a of ringAngles(p.mapRange, maxDeg)) {
+        const rad = (Math.tan((a * DEG) / 2) / edge) * h;
+        this.rings.push(a);
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad, 0, 2 * Math.PI);
+        ctx.stroke();
+        // label where the ring crosses the upper-right diagonal, or the right edge
+        let lx = cx + rad * Math.cos(Math.PI / 4), ly = cy - rad * Math.sin(Math.PI / 4);
+        if (lx > r.width - 28 || ly < 12) {
+          const dy = Math.sqrt(Math.max(0, rad * rad - (r.width / 2 - 30) ** 2));
+          lx = r.width - 30;
+          ly = cy - dy;
+          if (!(dy > 0) || ly < 12) continue;
+        }
+        ctx.fillStyle = '#fff';
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 3;
+        ctx.fillText(`${a}°`, lx + 2, ly - 2);
+        ctx.shadowBlur = 0;
+      }
+      ctx.restore();
     }
 
     // zone axes
