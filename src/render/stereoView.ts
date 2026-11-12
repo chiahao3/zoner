@@ -203,13 +203,12 @@ export class StereoView {
     const r = this.over.getBoundingClientRect();
     const R = s.R();
     const L = s.crystal.lattice;
-    const training = document.body.classList.contains('training');
     const accent = cssVar('--accent') || '#4cc9f0';
     const edge = this.edge();
     const inView = (P: [number, number]) => Math.abs(P[0]) <= edge * 1.02 && Math.abs(P[1]) <= edge * 1.02 * (r.height / r.width > 1 ? r.height / r.width : 1);
 
     // plane traces (Kikuchi band centres): great circles perpendicular to strong g
-    if (p.mapTraces && !training) {
+    if (p.mapTraces) {
       const Rf = s.refl();
       const seen = new Set<string>();
       const planes: Vec3[] = [];
@@ -246,7 +245,7 @@ export class StereoView {
 
     // tilt rings: total tilt from the current beam direction (radius tan(theta/2) on the map)
     this.rings = [];
-    if (!training && p.mapRings) {
+    if (p.mapRings) {
       const h = Math.min(r.width, r.height) / 2;
       const cornerP = (edge * Math.hypot(r.width, r.height)) / 2 / h;
       const maxDeg = (2 * Math.atan(cornerP)) / DEG;
@@ -327,10 +326,8 @@ export class StereoView {
       ctx.fill();
       ctx.stroke();
       this.hits.push({ x, y, zone: z });
-      if (!training) {
-        const ix = dirIdx(L, z.uvw);
-        cands.push({ x: x + rad + 2, y: y - rad - 10, w: idxWidth(ctx, ix, '[', ']'), h: 12, ix, uvw: z.uvw, imp });
-      }
+      const ix = dirIdx(L, z.uvw);
+      cands.push({ x: x + rad + 2, y: y - rad - 10, w: idxWidth(ctx, ix, '[', ']'), h: 12, ix, uvw: z.uvw, imp });
     }
     // labels for every zone within the index limit, lowest index first, skipping collisions
     this.labelled = [];
@@ -346,7 +343,7 @@ export class StereoView {
     ctx.shadowBlur = 0;
     // holder range outline: crystal directions on the beam at the edge of the alpha/beta range
     this.outlinePts = 0;
-    if (p.enforceLimits && !training) {
+    if (p.enforceLimits) {
       const pts = holderOutline(s.holder.mount, p.alphaLim * DEG, p.betaLim * DEG, 64);
       ctx.save();
       ctx.strokeStyle = '#ff5a52';
@@ -381,7 +378,7 @@ export class StereoView {
     ctx.lineTo(cx, cy + 10);
     ctx.stroke();
     // colour bar
-    if (!training) {
+    {
       const dw = dwst;
       const bw = Math.min(160, r.width * 0.45), bx = r.width - bw - 10, by = r.height - 22;
       const grad = ctx.createLinearGradient(bx, 0, bx + bw, 0);

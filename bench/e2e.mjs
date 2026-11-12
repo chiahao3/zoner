@@ -143,7 +143,6 @@ const shots = [
   ['cbed-zoom', "z.store.p.convAlpha=8; z.store.p.dpRange=0.35; z.store.p.thickness=60; z.store.setTilt(0.0015, -0.001);"],
   ['map-sum', "z.store.p.thickness=20; z.store.p.convAlpha=0; z.store.p.dpRange=2.2; z.store.p.imgMode='sum'; z.store.p.mapRange=10; z.store.setTilt(0.01, 0.006);"],
   ['sto', "z.store.p.imgMode='sum'; z.store.p.mapRings=true; z.store.p.mapRange=30; z.store.p.convAlpha=3; z.store.p.dpRange=2.2; z.store.loadCrystal('SrTiO3'); z.store.setTilt(0.03, 0.05);"],
-  ['training', "z.store.loadCrystal('Si'); z.trainer.begin('easy');"],
 ];
 for (const [name, js] of shots) {
   await page.evaluate((js) => {
@@ -159,7 +158,6 @@ const check = (name, ok, detail) => checks.push({ name, ok: !!ok, detail });
 const box = async (sel) => page.locator(sel).boundingBox();
 await page.evaluate(() => {
   const z = window.zoner;
-  z.trainer.stop();
   z.store.loadCrystal('Si');
   z.store.p.dpRange = 2.2;
   z.store.p.mapRange = 20;
@@ -256,15 +254,23 @@ check('Bloch on [110]: 1-11 family equal, 002 excited by double diffraction, sum
 await page.screenshot({ path: join(out, `bloch-${mode}.png`) });
 await page.evaluate(() => window.zoner.store.set('dpTheory', 'twobeam'));
 
-// training: Z (go to nearest) solves the round
-await page.evaluate(() => window.zoner.trainer.begin('easy'));
+// Z goes to the nearest zone (was covered by the training check before 0.0.5)
+await page.evaluate(() => { const z = window.zoner; z.store.loadCrystal('Si'); z.store.mountZone([1, 1, 0]); z.store.setTilt(0.9 * Math.PI / 180, -0.6 * Math.PI / 180); z.markAll(); });
 await page.waitForTimeout(300);
+await page.locator('body').click({ position: { x: 5, y: 995 } });
 await page.keyboard.press('z');
 await page.waitForTimeout(800);
-const solved = await page.evaluate(() => window.zoner.trainer.solved);
-check('training round is detected as solved on zone', solved, solved);
+const zAng = await page.evaluate(() => window.zoner.angleTo([1, 1, 0]));
+check('Z tilts onto the nearest zone', zAng < 0.01, { zAng });
+// training mode is gone (0.0.5): no button, no hook, T / H do nothing
+const st0 = await page.evaluate(() => ({ a: window.zoner.store.holder.alpha, b: window.zoner.store.holder.beta, c: window.zoner.store.p.convAlpha }));
 await page.keyboard.press('t');
-await page.waitForTimeout(200);
+await page.keyboard.press('h');
+await page.waitForTimeout(300);
+const noTrain = await page.evaluate((st0) => ({ btn: !!document.getElementById('train-btn'), hook: 'trainer' in window.zoner, cls: document.body.className,
+  same: window.zoner.store.holder.alpha === st0.a && window.zoner.store.holder.beta === st0.b && window.zoner.store.p.convAlpha === st0.c,
+  helpT: /training/i.test(document.body.textContent) }), st0);
+check('no training mode: no button or hook, T and H change nothing, no mention in the page', !noTrain.btn && !noTrain.hook && !/training/.test(noTrain.cls) && noTrain.same && !noTrain.helpT, noTrain);
 // CIF upload
 await page.setInputFiles('#cif-file', { name: 'GaN-test.cif', mimeType: 'text/plain', buffer: Buffer.from(`data_GaN
 _chemical_formula_sum 'Ga N'
@@ -308,8 +314,6 @@ await ctx2.close();
 
 // ---- session 2: layout, image toggle, legend, auto illumination, tilt rings, hover ----------
 await page.evaluate(() => {
-  const z = window.zoner;
-  z.trainer.stop();
   localStorage.clear();
 });
 const fresh = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
@@ -644,7 +648,6 @@ await pf.evaluate(() => { const s = window.zoner.store; s.set('imgMode', 'sum');
 await fresh.close();
 
 // mobile layout
-await page.evaluate(() => window.zoner.trainer.stop());
 await page.setViewportSize({ width: 390, height: 844 });
 await page.waitForTimeout(600);
 await page.screenshot({ path: join(out, `mobile-${mode}.png`), fullPage: false });

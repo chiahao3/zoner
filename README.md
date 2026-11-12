@@ -16,8 +16,6 @@ on the right, and the orientation panel in a rail on the right (ⓘ hides it, �
 
 Built-in crystals are Si, SrTiO3, Al, Au, Cu, GaAs, MgO, Fe (bcc) and GaN (wurtzite). Any CIF that
 lists its symmetry operators can be loaded, either with **CIF…** or by dropping the file on the page.
-Training mode starts you a few degrees off a low-index zone with only the DP visible, and times how
-long it takes you to get on zone.
 
 ## Use
 
@@ -25,8 +23,7 @@ long it takes you to get on zone.
 - Offline: `zoner.html` is a single 640 kB file that runs from disk with no network. It is linked in
   the help dialog and built by `npm run build:single`.
 - Keys: ← → ↑ ↓ tilt (the pattern moves the way of the arrow; Shift ×5, Alt ×0.2). Q/E rotate in
-  plane. Z goes to the nearest zone, 0 sets α = β = 0, L toggles the holder range, T toggles training,
-  H shows a hint, ? opens help.
+  plane. Z goes to the nearest zone, 0 sets α = β = 0, L toggles the holder range, ? opens help.
 - **Link** copies a URL that restores the crystal, the orientation and every setting.
 
 ## Physics, briefly

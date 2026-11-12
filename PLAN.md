@@ -99,7 +99,7 @@ src/render/         WebGL2 panels (each has dirty flag + render() + lastMs)
   label.ts          canvas index labels with overbars
 src/ui/             layout.ts (canvasSize, tilt-ring spacing; pure, tested),
                     state.ts (Store, Params, derived caches), controls.ts (schema → sidebar),
-                    input.ts (pointer), training.ts, hash.ts (URL state), util.ts
+                    input.ts (pointer), hash.ts (URL state), util.ts
 src/main.ts         2×2 layout + rail, event wiring, map hover readout, info panel, persistence,
                     render loop (adaptive throttling)
 bench/e2e.mjs       headless Chrome: smoke, 23 checks, timings, screenshots (-> ~/scratch/zoner-bench)
@@ -150,7 +150,7 @@ bench/e2e.mjs       headless Chrome: smoke, 23 checks, timings, screenshots (-> 
 - **Single convergence angle, automatic illumination**: `beamMode` draws disks once their radius
   exceeds 2σ of the spot blur (in device px), else spots. So the decision depends on zoom, which
   matches what the eye sees: a 0.5 mrad disk is a spot at 2.2 Å⁻¹ half-width but a disk at
-  0.1 Å⁻¹. Training forces α = 0. The √/log auto display switches on real overlap (2r > g_min);
+  0.1 Å⁻¹. The √/log auto display switches on real overlap (2r > g_min);
   the old 0.9·g_min flattened the default 3 mrad Si [110] pattern, whose disks nearly touch.
 - **Holder range switch** (session 2b, user request): off by default so the simulated tilt can go
   anywhere while matching an observed pattern. Switching on calls `Store.engageHolder(α, β)`:
@@ -190,8 +190,7 @@ bench/e2e.mjs       headless Chrome: smoke, 23 checks, timings, screenshots (-> 
   sum's shape at ~1% of its amplitude (auto contrast hides the scale). Measured: t = 0.5 nm,
   Δz = 2 nm, depth 3 nm: smear-equivalent length 0.26 nm (was 1.67 nm), = the depth sum's.
 - **λ/α² checkbox** (session 3): Store-level (`depthAuto`, `syncAutoDepth`), so links and the
-  sidebar agree; a typed depthRes unchecks it. α → 0 caps at 1000 nm instead of ∞. Training sets
-  α = 0 directly on `p`, so it does not disturb the depth setting.
+  sidebar agree; a typed depthRes unchecks it. α → 0 caps at 1000 nm instead of ∞.
 - **Off-zone residual fringes in the depth sum: investigated, not changed** (session 3; the user
   dropped it: in MEP the dominant blur is within the slice, and mis-tilt mainly hurts ADF-STEM via
   dechanneling). Findings for the record (Si [110], 20 nm, rms phase over 20 Å):
@@ -213,6 +212,10 @@ bench/e2e.mjs       headless Chrome: smoke, 23 checks, timings, screenshots (-> 
   (`dirAtQ` uses sin); e2e: the [110] marker sits at the same fraction of the half-width in both
   panels (0.5597 vs 0.5596). Angles shown in Å⁻¹ use θ·K, as the CBED disks do. DP hover angle =
   asin(|q|/K), checked against the go table at a Kikuchi centre.
+- **Training mode removed** (0.0.5, user: "not quite ready"). Deleted `ui/training.ts`, the header
+  button, T/H keys, the `body.training` veil/label suppression in the DP and map, and the
+  `trainer` hook. The e2e training check also covered Z; it is now its own check, plus one that
+  T/H do nothing. Session 1's training notes in §11 are kept as history.
 - **Global display range** (session 4, last request). Auto contrast is off by default; each image
   mode is shown on the range of the same image with `defaultZone` exactly on the beam (the zone
   the crystal opens on), so the depth sum through 20 nm fades from 7.2 rad on [110] to 0.6 rad at
@@ -350,7 +353,6 @@ disks drawn (α > 0 and big enough at the current zoom).
 | 3D legend | n/a | n/a | works | works (any element; unknown colour falls back to pink) | works | works |
 | 2×2 fit-to-window layout | n/a | n/a | n/a | n/a | n/a | n/a: phones (< 900 px) stack and scroll by design |
 | holder range switch | works | works | works | works | works | works |
-| training | works (forced α = 0) | n/a | works | works | works | works (touch drag; no keys) |
 | CIF without symops | n/a | n/a | n/a | treated as P1, with a toast warning | n/a | n/a |
 | finite-specimen slice weight | works | works | works | works | works | works |
 | λ/β auto lateral | β = 0 → 5 Å cap | works | works | works | slower: finer lateral → more reflections (capped 40k) | works |
