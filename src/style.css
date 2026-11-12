@@ -139,7 +139,16 @@ body.training .legend, body.training .lbl .hover { display: none; }
 #info { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
 .tiltrow { display: flex; gap: 14px; flex-wrap: wrap; align-items: baseline; font-size: 14px; }
 .tiltrow .lim { color: var(--warn); }
-.limrow { font-size: 11px; }
+.holderbox { padding: 8px 10px 6px; display: flex; flex-direction: column; gap: 5px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 13px; user-select: none; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch .track { width: 32px; height: 18px; border-radius: 9px; background: var(--line); position: relative; transition: background 0.15s; flex: none; }
+.switch .track::after { content: ''; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--text); transition: transform 0.15s; }
+.switch input:checked + .track { background: var(--accent); }
+.switch input:checked + .track::after { transform: translateX(14px); background: #000; }
+.switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hread { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.hread input { width: 62px; padding: 1px 5px; }
 table.zones { border-collapse: collapse; width: 100%; font: 12px ui-monospace, monospace; }
 table.zones th { text-align: left; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--line); }
 table.zones td { padding: 2px 4px; }

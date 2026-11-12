@@ -40,17 +40,67 @@ const zRange = el('input', { type: 'range', id: 'img-z', min: '0', max: '20', st
 const zOut = el('span', { class: 'unit', id: 'img-z-out' });
 const zWrap = el('span', { class: 'zwrap' }, zRange, zOut);
 const seg = el('span', { class: 'seg' }, imgBtns.sum, imgBtns.slice);
+const ringsBtn = btn('Rings', 'dashed rings of total tilt from the current beam (hover gives the same number)');
+const srcLbl = el('span', { class: 'unit', id: 'map-src', title: 'the map is coloured by the resolution of the image shown (toggle in the image panel)' });
 // 2x2 workspace: diffraction space on the left (DP, stereogram), real space on the right
 // (structure model, image); orientation info in the right-hand rail.
 const grid = $('grid');
 grid.append(
   panel('dp', 'Diffraction'),
   panel('r3d', 'Crystal model', v3dBtns),
-  panel('map', 'Resolution stereogram'),
+  panel('map', 'Resolution stereogram', [srcLbl, ringsBtn]),
   panel('img', 'Real-space image', [zWrap, seg]),
 );
 $('rail').append(panel('info', 'Orientation', [], 'html'));
-$('panel-info').querySelector('.stage')!.append(el('div', { id: 'info' }));
+// holder range switch: off while matching the pattern; switching on takes the current orientation
+// as the stage reading below (prefilled with the current alpha/beta) and from then on clamps.
+const swIn = el('input', { type: 'checkbox', id: 'holder-sw' });
+const stA = el('input', { type: 'number', id: 'stage-a', step: '0.1', title: 'stage α reading (deg) for the current orientation' });
+const stB = el('input', { type: 'number', id: 'stage-b', step: '0.1', title: 'stage β reading (deg) for the current orientation' });
+const hRange = el('span', { class: 'muted', id: 'holder-range' });
+const hRead = el('div', { class: 'hread', id: 'holder-read' },
+  el('span', { class: 'muted', text: 'stage now' }), el('label', { text: 'α' }), stA, el('label', { text: 'β' }), stB);
+const holderBox = el('div', { class: 'holderbox', id: 'holder-box' },
+  el('label', { class: 'switch', title: 'Match the pattern first, then switch on: the current orientation is taken as the stage reading and the holder range is enforced' },
+    swIn, el('span', { class: 'track' }), el('span', { text: 'Holder range' })),
+  hRange, hRead);
+$('panel-info').querySelector('.stage')!.append(holderBox, el('div', { id: 'info' }));
+let stageEdited = false;
+for (const inp of [stA, stB]) {
+  inp.addEventListener('input', () => (stageEdited = true));
+  inp.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      swIn.checked = true;
+      swIn.dispatchEvent(new Event('change'));
+    }
+  });
+}
+swIn.addEventListener('change', () => {
+  const p = store.p;
+  if (swIn.checked) {
+    const a = parseFloat(stA.value), b = parseFloat(stB.value);
+    if (!store.engageHolder(a, b)) {
+      swIn.checked = false;
+      toast(`Stage reading α ${stA.value}°, β ${stB.value}° is outside the holder range (α −${p.alphaLim}…+${p.alphaLim}°, β −${p.betaLim}…+${p.betaLim}°).`);
+      return;
+    }
+    stageEdited = false;
+    toast(`Holder range on: this orientation is stage α ${fmt(a, 1)}°, β ${fmt(b, 1)}°. Tilts are now limited to α −${p.alphaLim}…+${p.alphaLim}°, β −${p.betaLim}…+${p.betaLim}°.`);
+  } else store.releaseHolder();
+});
+function syncHolderBox() {
+  const p = store.p;
+  swIn.checked = p.enforceLimits;
+  hRange.textContent = p.enforceLimits
+    ? `α −${p.alphaLim}° … +${p.alphaLim}°, β −${p.betaLim}° … +${p.betaLim}°`
+    : `off: tilt freely to match the pattern, then switch on`;
+  hRead.style.display = p.enforceLimits ? 'none' : '';
+  if (!stageEdited && document.activeElement !== stA && document.activeElement !== stB) {
+    stA.value = (store.holder.alpha / DEG).toFixed(1);
+    stB.value = (store.holder.beta / DEG).toFixed(1);
+  }
+}
 $('panel-r3d').querySelector('.stage')!.append(el('div', { class: 'legend', id: 'r3d-legend' }));
 const controls = new Controls(store, $('side'));
 
@@ -71,7 +121,10 @@ function syncImgTools() {
   zr.max = String(p.thickness);
   if (document.activeElement !== zr) zr.value = String(p.sliceDepth);
   zOut.textContent = `z ${fmt(p.sliceDepth, 1)} nm`;
+  ringsBtn.classList.toggle('on', p.mapRings);
+  srcLbl.textContent = p.imgMode === 'sum' ? 'depth sum' : 'MEP slice';
 }
+ringsBtn.onclick = () => store.set('mapRings', !store.p.mapRings);
 let infoDirty = true;
 
 const trainer = new Trainer(store, () => {
@@ -88,10 +141,12 @@ function markAll() {
 let hashTimer = 0;
 store.subscribe((kinds) => {
   markAll();
+  syncHolderBox();
   if (kinds.has('orientation')) trainer.check();
   if (kinds.has('params') || kinds.has('crystal')) {
     controls.refresh();
     syncImgTools();
+syncHolderBox();
   }
   if (kinds.has('crystal')) syncCrystalSelect();
   if (!trainer.active) {
@@ -167,7 +222,7 @@ $('map-ov').addEventListener('pointermove', (e) => {
   const th = 2 * Math.atan(Math.hypot(P[0], P[1]));
   const t = tiltToBring(store.holder.mount, map.crystalDirAt(P));
   const p = store.p;
-  const out = Math.abs(t.alpha) > p.alphaLim * DEG || Math.abs(t.beta) > p.betaLim * DEG;
+  const out = p.enforceLimits && (Math.abs(t.alpha) > p.alphaLim * DEG || Math.abs(t.beta) > p.betaLim * DEG);
   mapLbl.innerHTML = `<div class="hover${out ? ' out' : ''}">${fmt(th / DEG, 1)}° from beam · α ${fmt(t.alpha / DEG, 1)}° β ${fmt(t.beta / DEG, 1)}°${out ? ' (beyond range)' : ''}</div>`;
 });
 $('map-ov').addEventListener('pointerleave', () => (mapLbl.innerHTML = ''));
@@ -198,7 +253,8 @@ v3dBtns[2].onclick = () => r3d.setView('oblique');
 let keyTimer = 0;
 window.addEventListener('keydown', (e) => {
   const t = e.target as HTMLElement;
-  if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+  const typing = t && ((t.tagName === 'INPUT' && !['checkbox', 'radio', 'button'].includes((t as HTMLInputElement).type)) || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA');
+  if (typing) return;
   const step = store.p.step * DEG * (e.shiftKey ? 5 : e.altKey ? 0.2 : 1);
   let used = true;
   switch (e.key) {
@@ -392,12 +448,11 @@ function renderInfo() {
   info.innerHTML = `
     <div class="tiltrow"><span class="${lim(a, p.alphaLim)}">α <b>${fmt(a, 2)}°</b></span><span class="${lim(b, p.betaLim)}">β <b>${fmt(b, 2)}°</b></span>
     <span class="muted">beam ∥ [${uvw.map((x) => fmt(x / mx, 3)).join(' ')}]</span></div>
-    <div class="limrow muted">holder range: α −${p.alphaLim}° … +${p.alphaLim}°, β −${p.betaLim}° … +${p.betaLim}°${p.enforceLimits ? '' : ' (not enforced)'}</div>
     <table class="zones"><thead><tr><th>zone</th><th>off</th><th>α</th><th>β</th><th></th></tr></thead><tbody>
     ${near.map((n, i) => {
       const t = tiltToBring(s.holder.mount, n.zone.dir);
       const ta = t.alpha / DEG, tb = t.beta / DEG;
-      const out = Math.abs(ta) > p.alphaLim || Math.abs(tb) > p.betaLim;
+      const out = p.enforceLimits && (Math.abs(ta) > p.alphaLim || Math.abs(tb) > p.betaLim);
       return `<tr class="${out ? 'out' : ''}"><td>${htmlDir(L, n.zone.uvw)}</td><td>${fmt(n.angle / DEG, 2)}°</td><td>${fmt(ta, 2)}</td><td>${fmt(tb, 2)}</td><td><button class="mini go" data-i="${i}">go</button></td></tr>`;
     }).join('')}
     </tbody></table>
@@ -462,6 +517,7 @@ restore();
 syncCrystalSelect();
 controls.refresh();
 syncImgTools();
+syncHolderBox();
 
 // ---------------------------------------------------------------------------------------------
 // render loop

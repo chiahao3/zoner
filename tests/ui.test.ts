@@ -7,6 +7,9 @@ import { builtinCrystal, species } from '../src/physics/crystal';
 import { canvasSize, ringStep, ringAngles } from '../src/ui/layout';
 import { Store, DEFAULTS } from '../src/ui/state';
 import { decodeHash, encodeHash } from '../src/ui/hash';
+import { GROUPS } from '../src/ui/controls';
+
+const DEG = Math.PI / 180;
 
 describe('automatic parallel / convergent illumination', () => {
   const K = 1 / wavelength(300);
@@ -105,5 +108,55 @@ describe('0.0.1 links', () => {
     const s3 = new Store();
     decodeHash(s3, encodeHash(new Store()));
     expect(s3.p.convAlpha).toBe(3);
+  });
+});
+
+describe('session 2b: defaults and synced source', () => {
+  it('rings off, holder range off, lateral 0.5 A, depth 3 nm', () => {
+    expect(DEFAULTS.mapRings).toBe(false);
+    expect(DEFAULTS.enforceLimits).toBe(false);
+    expect(DEFAULTS.lateralRes).toBe(0.5);
+    expect(DEFAULTS.depthRes).toBe(3);
+  });
+  it('the stereogram has no separate source: it follows the image mode', () => {
+    expect('mapSource' in DEFAULTS).toBe(false);
+  });
+  it('no aperture-estimate buttons in the controls', () => {
+    for (const g of GROUPS) for (const c of g.ctls) expect('auto' in c).toBe(false);
+  });
+  it('0.0.1 links: mapSource becomes the shared image/map mode', () => {
+    const s = new Store();
+    decodeHash(s, '#crystal=Si&mapSource=sum&a=0&b=0');
+    expect(s.p.imgMode).toBe('sum');
+    const s2 = new Store();
+    decodeHash(s2, '#crystal=Si&a=0&b=0'); // no explicit choice: the new default (depth sum)
+    expect(s2.p.imgMode).toBe('sum');
+  });
+});
+
+describe('holder range switch: engage at the stage reading', () => {
+  const near = (A: number[], B: number[]) => A.every((x, i) => Math.abs(x - B[i]) < 1e-12);
+  it('keeps the crystal orientation and relabels it with the stage alpha/beta', () => {
+    const s = new Store();
+    s.p.enforceLimits = false;
+    s.setTilt(50 * DEG, -40 * DEG); // matched the pattern far outside the holder range
+    const R0 = s.R();
+    expect(s.engageHolder(10, -5)).toBe(true);
+    expect(near(s.R(), R0)).toBe(true);
+    expect(s.holder.alpha).toBeCloseTo(10 * DEG, 12);
+    expect(s.holder.beta).toBeCloseTo(-5 * DEG, 12);
+    expect(s.p.enforceLimits).toBe(true);
+    s.setTilt(60 * DEG, 0); // now clamped at +35
+    expect(s.holder.alpha).toBeCloseTo(35 * DEG, 12);
+  });
+  it('defaults to the current alpha/beta (no re-mount) and refuses readings beyond the range', () => {
+    const s = new Store();
+    s.setTilt(3 * DEG, 4 * DEG);
+    const M0 = s.holder.mount.slice();
+    expect(s.engageHolder()).toBe(true);
+    expect(near(s.holder.mount, M0)).toBe(true);
+    const s2 = new Store();
+    expect(s2.engageHolder(40, 0)).toBe(false);
+    expect(s2.p.enforceLimits).toBe(false);
   });
 });

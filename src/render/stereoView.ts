@@ -94,6 +94,8 @@ export class StereoView {
   hits: { x: number; y: number; zone: Zone }[] = [];
   /** tilt-ring angles (deg) drawn in the last frame */
   rings: number[] = [];
+  /** depth transfer that coloured the last frame (follows the image mode) */
+  source: 'sum' | 'slice' = 'sum';
   lowRes = false;
   private onZone = new Map<string, number>();
   private onZoneKey = '';
@@ -168,7 +170,8 @@ export class StereoView {
     gl.uniformMatrix3fv(u('uRt'), false, colMajor(transpose(R)));
     gl.uniformMatrix3fv(u('uMount'), false, colMajor(s.holder.mount));
     gl.uniform1f(u('uEdge'), this.edge());
-    const tp = s.transfer(p.mapSource);
+    const tp = s.transfer(p.imgMode);
+    this.source = p.imgMode;
     gl.uniform1f(u('uSPass'), passWidth(tp));
     const [db, dw] = this.dRange();
     gl.uniform1f(u('uDbest'), db);
@@ -236,7 +239,7 @@ export class StereoView {
 
     // tilt rings: total tilt from the current beam direction (radius tan(theta/2) on the map)
     this.rings = [];
-    if (!training) {
+    if (!training && p.mapRings) {
       const h = Math.min(r.width, r.height) / 2;
       const cornerP = (edge * Math.hypot(r.width, r.height)) / 2 / h;
       const maxDeg = (2 * Math.atan(cornerP)) / DEG;
@@ -278,10 +281,10 @@ export class StereoView {
     const zones = s.zones().filter((z) => Math.max(...z.uvw.map(Math.abs)) <= p.mapZoneIdx);
     const lenMin = zones.length ? zones[0].len : 1;
     // resolution reached *on* each zone (independent of orientation, cached per parameter set)
-    const tp = s.transfer(p.mapSource);
+    const tp = s.transfer(p.imgMode);
     const zs = s.zoneSet();
     const [db, dwst] = this.dRange();
-    const okey = `${p.crystal}|${p.dw}|${p.kV}|${p.lateralRes}|${p.mapSource}|${p.sliceThickness}|${p.depthRes}|${p.thickness}|${p.mapZoneIdx}`;
+    const okey = `${p.crystal}|${p.dw}|${p.kV}|${p.lateralRes}|${p.imgMode}|${p.sliceThickness}|${p.depthRes}|${p.thickness}|${p.mapZoneIdx}`;
     if (okey !== this.onZoneKey) {
       this.onZone.clear();
       this.onZoneKey = okey;
@@ -346,7 +349,7 @@ export class StereoView {
       ctx.textAlign = 'right';
       ctx.fillText(`${fmt(db, 2)} Å`, bx + bw, by - 3);
       ctx.textAlign = 'left';
-      ctx.fillText(`±${p.mapRange}°  ${p.mapSource === 'sum' ? 'depth sum' : 'MEP slice'}`, 8, r.height - 10);
+      ctx.fillText(`±${p.mapRange}°  ${p.imgMode === 'sum' ? 'depth sum' : 'MEP slice'}`, 8, r.height - 10);
       ctx.shadowBlur = 0;
     }
   }

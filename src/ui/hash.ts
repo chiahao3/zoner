@@ -54,4 +54,7 @@ function migrate001(q: URLSearchParams) {
   else if (illum === 'parallel') q.set('convAlpha', '0');
   q.delete('dpIllum');
   q.delete('dpAlpha');
+  const ms = q.get('mapSource'); // the map now follows the image mode
+  if (ms === 'sum' || ms === 'slice') q.set('imgMode', ms);
+  q.delete('mapSource');
 }

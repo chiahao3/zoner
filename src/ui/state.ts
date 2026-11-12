@@ -2,6 +2,7 @@
 // derived physics data. Panels subscribe and re-render on change.
 import { Crystal, builtinCrystal, defaultZone, setDebyeWaller, BUILTIN_NAMES } from '../physics/crystal';
 import { Holder, mountForZone, tiltToBring } from '../physics/orientation';
+import { matMul, rotX, rotY, orthonormalize } from '../physics/linalg';
 import { buildReflections, ReflectionSet } from '../physics/structure';
 import { enumerateZones, Zone } from '../physics/zones';
 import { wavelength } from '../physics/constants';
@@ -30,15 +31,15 @@ export interface Params {
   dpCmap: string;
   blochBeams: number;
   // images
-  imgMode: 'sum' | 'slice'; // which real-space image is shown
+  imgMode: 'sum' | 'slice'; // real-space image shown, and the depth transfer that colours the stereogram
   imgFov: number; // A
   imgCmap: string;
   imgAuto: boolean;
   // stereogram
   mapRange: number; // deg half-width
-  mapSource: 'slice' | 'sum';
   mapZoneIdx: number;
   mapTraces: boolean;
+  mapRings: boolean; // dashed tilt rings (the hover readout gives the same numbers)
   mapCmap: string;
   // 3D
   view3d: 'slab' | 'cluster';
@@ -47,20 +48,22 @@ export interface Params {
   // holder
   alphaLim: number; // deg
   betaLim: number; // deg
-  enforceLimits: boolean;
+  enforceLimits: boolean; // holder range switch: off while matching the pattern, then engaged
   step: number; // deg per arrow key
 }
 
 export const DEFAULTS: Params = {
-  crystal: 'Si', kV: 300, convAlpha: 3, thickness: 20, sliceThickness: 2, depthRes: 4.9, lateralRes: 0.5,
+  crystal: 'Si', kV: 300, convAlpha: 3, thickness: 20, sliceThickness: 2, depthRes: 3, lateralRes: 0.5,
   sliceDepth: 10, dw: 0.5,
   dpTheory: 'twobeam', dpRange: 2.2, dpDisplay: 'auto', dpDecades: 3.5, dpSpot: 2.2, kikuchi: 0.5,
   dpLabels: true, dpLaue: false, dpCmap: 'gray', blochBeams: 61,
   imgMode: 'sum', imgFov: 20, imgCmap: 'gray', imgAuto: true,
-  mapRange: 20, mapSource: 'slice', mapZoneIdx: 3, mapTraces: true, mapCmap: 'viridis',
+  mapRange: 20, mapZoneIdx: 3, mapTraces: true, mapRings: false, mapCmap: 'viridis',
   view3d: 'slab', slabWidth: 14, atomScale: 1,
-  alphaLim: 35, betaLim: 30, enforceLimits: true, step: 0.2,
+  alphaLim: 35, betaLim: 30, enforceLimits: false, step: 0.2,
 };
+
+const DEG = Math.PI / 180;
 
 export type ChangeKind = 'orientation' | 'params' | 'crystal';
 type Listener = (kinds: Set<ChangeKind>) => void;
@@ -188,6 +191,30 @@ export class Store {
   rotateInPlane(t: number) {
     this.holder.rotateInPlane(t);
     this.emit('orientation');
+  }
+  /**
+   * Holder range switch. Engage the limits with the stage reading (deg) that the current orientation
+   * corresponds to: the crystal keeps its orientation, the mount absorbs the difference, and from
+   * now on alpha/beta are clamped to the range. Defaults to the current alpha/beta (no re-mount).
+   * Returns false (and changes nothing) if the reading is outside the range.
+   */
+  engageHolder(alphaDeg = this.holder.alpha / DEG, betaDeg = this.holder.beta / DEG): boolean {
+    if (!Number.isFinite(alphaDeg) || !Number.isFinite(betaDeg)) return false;
+    if (Math.abs(alphaDeg) > this.p.alphaLim + 1e-9 || Math.abs(betaDeg) > this.p.betaLim + 1e-9) return false;
+    const a = alphaDeg * DEG, b = betaDeg * DEG;
+    if (Math.abs(a - this.holder.alpha) > 1e-12 || Math.abs(b - this.holder.beta) > 1e-12) {
+      // R = Rx(a) Ry(b) M'  =>  M' = (Rx(a) Ry(b))^T R
+      const T = matMul(rotX(a), rotY(b));
+      this.holder = new Holder(orthonormalize(matMul(transpose(T), this.R())), a, b);
+    }
+    this.p.enforceLimits = true;
+    this.emit('params');
+    this.emit('orientation');
+    return true;
+  }
+  releaseHolder() {
+    this.p.enforceLimits = false;
+    this.emit('params');
   }
   /** Re-mount so that zone [uvw] is on the beam at zero tilt. */
   mountZone(uvw: Vec3) {
