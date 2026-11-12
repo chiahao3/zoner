@@ -11,7 +11,7 @@ import { TransferParams, ZoneSet, buildZoneSet } from '../physics/transfer';
 export interface Params {
   crystal: string;
   kV: number;
-  convAlpha: number; // mrad, probe semi-angle for imaging (and DP if dpAlphaSame)
+  convAlpha: number; // mrad, probe semi-angle: DP disks (0 = parallel) and the lambda/alpha estimates
   thickness: number; // nm
   sliceThickness: number; // nm
   depthRes: number; // nm FWHM
@@ -19,8 +19,6 @@ export interface Params {
   sliceDepth: number; // nm, depth of the MEP slice centre below the entrance surface
   dw: number; // A^2 Debye-Waller B for all sites
   // diffraction
-  dpIllum: 'parallel' | 'convergent';
-  dpAlpha: number; // mrad for the DP when convergent
   dpTheory: 'kinematic' | 'twobeam' | 'bloch';
   dpRange: number; // 1/A half width of the DP view
   dpDisplay: 'auto' | 'log' | 'gamma'; // auto = log for SAED, gamma for CBED
@@ -32,6 +30,7 @@ export interface Params {
   dpCmap: string;
   blochBeams: number;
   // images
+  imgMode: 'sum' | 'slice'; // which real-space image is shown
   imgFov: number; // A
   imgCmap: string;
   imgAuto: boolean;
@@ -53,11 +52,11 @@ export interface Params {
 }
 
 export const DEFAULTS: Params = {
-  crystal: 'Si', kV: 300, convAlpha: 20, thickness: 20, sliceThickness: 2, depthRes: 4.9, lateralRes: 0.5,
+  crystal: 'Si', kV: 300, convAlpha: 3, thickness: 20, sliceThickness: 2, depthRes: 4.9, lateralRes: 0.5,
   sliceDepth: 10, dw: 0.5,
-  dpIllum: 'parallel', dpAlpha: 2, dpTheory: 'twobeam', dpRange: 2.2, dpDisplay: 'auto', dpDecades: 3.5, dpSpot: 2.2, kikuchi: 0.5,
+  dpTheory: 'twobeam', dpRange: 2.2, dpDisplay: 'auto', dpDecades: 3.5, dpSpot: 2.2, kikuchi: 0.5,
   dpLabels: true, dpLaue: false, dpCmap: 'gray', blochBeams: 61,
-  imgFov: 20, imgCmap: 'gray', imgAuto: true,
+  imgMode: 'sum', imgFov: 20, imgCmap: 'gray', imgAuto: true,
   mapRange: 20, mapSource: 'slice', mapZoneIdx: 3, mapTraces: true, mapCmap: 'viridis',
   view3d: 'slab', slabWidth: 14, atomScale: 1,
   alphaLim: 35, betaLim: 30, enforceLimits: true, step: 0.2,

@@ -25,3 +25,11 @@ export function kinematicIntensity(s: number, xi: number, t: number): number {
   const a = (Math.PI * t) / xi;
   return a * a * sinc * sinc;
 }
+
+/** Illumination from the single convergence semi-angle (mrad): disks of radius rd = alpha*K
+ *  (1/A) are drawn as CBED disks once they are larger than the spot blur (radius > 2 sigma), and
+ *  as SAED-like spots otherwise (alpha = 0 is parallel). pxPerInvA and sigmaPx in device px. */
+export function beamMode(alphaMrad: number, K: number, pxPerInvA: number, sigmaPx: number): { cbed: boolean; rd: number } {
+  const rd = Math.max(0, alphaMrad) * 1e-3 * K;
+  return { cbed: rd > 0 && rd * pxPerInvA >= 2 * sigmaPx, rd };
+}

@@ -88,6 +88,13 @@ export function setDebyeWaller(c: Crystal, B: number): Crystal {
   return { ...c, sites: c.sites.map((s) => ({ ...s, B })) };
 }
 
+/** Elements in order of first appearance, with the number of sites per cell (for legends). */
+export function species(c: Crystal): { el: string; n: number }[] {
+  const m = new Map<string, number>();
+  for (const st of c.sites) m.set(st.el, (m.get(st.el) ?? 0) + 1);
+  return [...m].map(([el, n]) => ({ el, n }));
+}
+
 export function formula(c: Crystal): string {
   const counts = new Map<string, number>();
   for (const s of c.sites) counts.set(s.el, (counts.get(s.el) ?? 0) + s.occ);

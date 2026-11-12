@@ -90,10 +90,11 @@ const bench = async (label, setup) => {
 };
 
 const timings = [];
-timings.push(await bench('Si [110] default (SAED, two-beam)'));
-timings.push(await bench('Si CBED 2 mrad', "z.store.p.dpIllum='convergent'; z.store.p.dpAlpha=2;"));
-timings.push(await bench('Si CBED 20 mrad', "z.store.p.dpAlpha=20;"));
-timings.push(await bench('Si kinematic SAED', "z.store.p.dpIllum='parallel'; z.store.p.dpTheory='kinematic';"));
+timings.push(await bench('Si [110] default (CBED 3 mrad, two-beam)'));
+timings.push(await bench('Si [110] parallel (alpha 0)', "z.store.p.convAlpha=0;"));
+timings.push(await bench('Si CBED 2 mrad', "z.store.p.convAlpha=2;"));
+timings.push(await bench('Si CBED 20 mrad', "z.store.p.convAlpha=20;"));
+timings.push(await bench('Si kinematic parallel', "z.store.p.convAlpha=0; z.store.p.dpTheory='kinematic';"));
 timings.push(await bench('Si lateral 0.3 A', "z.store.p.dpTheory='twobeam'; z.store.p.lateralRes=0.3;"));
 timings.push(await bench('SrTiO3 [001]', "z.store.p.lateralRes=0.5; z.store.loadCrystal('SrTiO3');"));
 timings.push(await bench('GaN [2-1-10]', "z.store.loadCrystal('GaN');"));
@@ -119,17 +120,17 @@ await page.evaluate(() => {
   z.store.loadCrystal('Si');
   z.store.p.lateralRes = 0.5;
   z.store.p.dpTheory = 'twobeam';
-  z.store.p.dpIllum = 'parallel';
+  z.store.p.convAlpha = 3;
   z.store.tiltBy(0.012, -0.02);
   z.markAll();
 });
 await page.waitForTimeout(600);
 await page.screenshot({ path: join(out, `default-${mode}.png`) });
 const shots = [
-  ['cbed', "z.store.p.dpIllum='convergent'; z.store.p.dpAlpha=3; z.store.p.dpRange=1.2; z.store.setTilt(0.004, 0.002);"],
-  ['cbed-zoom', "z.store.p.dpAlpha=8; z.store.p.dpRange=0.35; z.store.p.thickness=60; z.store.setTilt(0.0015, -0.001);"],
-  ['map-sum', "z.store.p.thickness=20; z.store.p.dpIllum='parallel'; z.store.p.dpRange=2.2; z.store.p.mapSource='sum'; z.store.p.mapRange=10; z.store.setTilt(0.01, 0.006);"],
-  ['sto', "z.store.p.mapSource='slice'; z.store.p.mapRange=30; z.store.p.dpIllum='parallel'; z.store.p.dpRange=2.2; z.store.loadCrystal('SrTiO3'); z.store.setTilt(0.03, 0.05);"],
+  ['cbed', "z.store.p.convAlpha=3; z.store.p.dpRange=1.2; z.store.setTilt(0.004, 0.002);"],
+  ['cbed-zoom', "z.store.p.convAlpha=8; z.store.p.dpRange=0.35; z.store.p.thickness=60; z.store.setTilt(0.0015, -0.001);"],
+  ['map-sum', "z.store.p.thickness=20; z.store.p.convAlpha=0; z.store.p.dpRange=2.2; z.store.p.mapSource='sum'; z.store.p.mapRange=10; z.store.setTilt(0.01, 0.006);"],
+  ['sto', "z.store.p.mapSource='slice'; z.store.p.mapRange=30; z.store.p.convAlpha=3; z.store.p.dpRange=2.2; z.store.loadCrystal('SrTiO3'); z.store.setTilt(0.03, 0.05);"],
   ['training', "z.store.loadCrystal('Si'); z.trainer.begin('easy');"],
 ];
 for (const [name, js] of shots) {

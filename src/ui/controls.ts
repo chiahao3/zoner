@@ -29,7 +29,7 @@ export const GROUPS: Group[] = [
     ctls: [
       { key: 'kV', label: 'High tension', type: 'select', unit: 'kV', options: ['60', '80', '120', '200', '300'] },
       { key: 'thickness', label: 'Thickness t', type: 'number', min: 0.5, max: 500, step: 0.5, unit: 'nm' },
-      { key: 'convAlpha', label: 'Convergence α', type: 'number', min: 0.5, max: 60, step: 0.5, unit: 'mrad', title: 'Probe semi-angle used for the MEP resolution estimates (and the DP if set below)' },
+      { key: 'convAlpha', label: 'Convergence α', type: 'number', min: 0, max: 60, step: 0.5, unit: 'mrad', title: 'Probe semi-angle. 0 = parallel beam (SAED spots). Disks are drawn as CBED once they are larger than the spot size, otherwise as spots. Also used by the λ/2α and λ/α² estimate buttons.' },
       { key: 'dw', label: 'Debye-Waller B', type: 'number', min: 0, max: 3, step: 0.05, unit: 'Å²' },
     ],
   },
@@ -39,12 +39,12 @@ export const GROUPS: Group[] = [
       {
         key: 'lateralRes', label: 'Lateral resolution', type: 'number', min: 0.1, max: 5, step: 0.05, unit: 'Å',
         title: 'FWHM of the lateral PSF; also the |g| cut-off of the resolution map',
-        auto: { label: 'λ/2α', fn: (s) => +(s.lambda / (2 * s.p.convAlpha * 1e-3)).toFixed(2), title: 'aperture-limited estimate λ/(2α)' },
+        auto: { label: 'λ/2α', fn: (s) => (s.p.convAlpha > 0 ? +(s.lambda / (2 * s.p.convAlpha * 1e-3)).toFixed(2) : s.p.lateralRes), title: 'aperture-limited estimate λ/(2α)' },
       },
       {
         key: 'depthRes', label: 'Depth resolution', type: 'number', min: 0, max: 100, step: 0.1, unit: 'nm',
         title: 'FWHM of the depth PSF of a reconstructed slice',
-        auto: { label: 'λ/α²', fn: (s) => +((s.lambda / (s.p.convAlpha * 1e-3) ** 2) / 10).toFixed(1), title: 'aperture-limited estimate λ/α²' },
+        auto: { label: 'λ/α²', fn: (s) => (s.p.convAlpha > 0 ? +((s.lambda / (s.p.convAlpha * 1e-3) ** 2) / 10).toFixed(1) : s.p.depthRes), title: 'aperture-limited estimate λ/α²' },
       },
       { key: 'sliceThickness', label: 'Slice thickness Δz', type: 'number', min: 0.1, max: 100, step: 0.1, unit: 'nm' },
       { key: 'sliceDepth', label: 'Slice depth z', type: 'range', min: 0, max: 20, step: 0.1, unit: 'nm', title: 'centre of the displayed MEP slice below the entrance surface' },
@@ -57,8 +57,6 @@ export const GROUPS: Group[] = [
     name: 'Diffraction',
     open: true,
     ctls: [
-      { key: 'dpIllum', label: 'Illumination', type: 'select', options: [['parallel', 'parallel (SAED)'], ['convergent', 'convergent (CBED)']] },
-      { key: 'dpAlpha', label: 'DP convergence', type: 'number', min: 0.2, max: 40, step: 0.1, unit: 'mrad' },
       { key: 'dpTheory', label: 'Theory', type: 'select', options: [['kinematic', 'kinematic'], ['twobeam', 'two-beam per g (dynamical)'], ['bloch', 'Bloch wave, N beams']] },
       { key: 'blochBeams', label: 'Bloch beams N', type: 'number', min: 5, max: 201, step: 1 },
       { key: 'kikuchi', label: 'Kikuchi bands', type: 'range', min: 0, max: 1, step: 0.05 },

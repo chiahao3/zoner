@@ -7,7 +7,7 @@
 // Pass 2 (full screen): Kikuchi bands from the strongest planes + diffuse background, log tone map.
 import { Store } from '../ui/state';
 import { compile, uniforms, FULLSCREEN_VS, fullscreenVAO, DataTexture, FloatTarget, GLSL_FETCH, GLSL_COLORMAPS, COLORMAP_IDS, getGL, fitCanvas } from './gl';
-import { excitationError, twoBeamIntensity, kinematicIntensity } from '../physics/diffraction';
+import { excitationError, twoBeamIntensity, kinematicIntensity, beamMode } from '../physics/diffraction';
 import { blochIntensities, selectBlochBeams } from '../physics/bloch';
 import { Vec3, normalize, matVec, transpose, overlay2D, fmt, cssVar, DEG } from '../ui/util';
 import { rotationAtoB } from '../physics/orientation';
@@ -152,6 +152,8 @@ export class DPView {
   private bloch = { ver: -1, key: '', I: new Map<number, number>(), I0: 1, ms: 0, n: 0 };
   private blochTimer = 0;
   pan: [number, number] = [0, 0];
+  /** true when the last frame drew CBED disks (automatic from the convergence angle and zoom) */
+  cbed = false;
   lastMs = 0;
   onNeedRender: () => void = () => {};
 
@@ -281,11 +283,15 @@ export class DPView {
     const rot = s.R();
     const K = s.K;
     const T = p.thickness * 10;
-    const cbed = p.dpIllum === 'convergent';
-    const rd = cbed ? p.dpAlpha * 1e-3 * K : 0;
     const scaleCss = this.scale();
     const dpr = W / this.canvas.getBoundingClientRect().width;
     const scalePx = scaleCss * dpr;
+    const sigmaPx = p.dpSpot * (W / 512);
+    // one convergence angle: CBED disks once they are larger than the spot blur, else spots
+    const mode = beamMode(p.convAlpha, K, scalePx, sigmaPx);
+    const cbed = mode.cbed;
+    const rd = cbed ? mode.rd : 0;
+    this.cbed = cbed;
     const view = p.dpRange * 1.45 + rd + Math.hypot(...this.pan);
 
     // Bloch cache
@@ -320,7 +326,7 @@ export class DPView {
       sumI += I;
       const gxy = Math.hypot(g[0], g[1]);
       if (cbed) {
-        const sMin = Math.max(0, Math.abs(sg) - p.dpAlpha * 1e-3 * gxy);
+        const sMin = Math.max(0, Math.abs(sg) - p.convAlpha * 1e-3 * gxy);
         const sCut = 3 / T + 3 * ix;
         if (sMin > sCut) continue;
         if (reflData.length < 4 * 2048) reflData.push(g[0], g[1], g[2], ix);
@@ -348,7 +354,6 @@ export class DPView {
     gl.blendFunc(gl.ONE, gl.ONE);
     gl.useProgram(this.spotProg);
     const u = this.uS;
-    const sigmaPx = p.dpSpot * (W / 512);
     gl.uniform1f(u('uScale'), scalePx);
     gl.uniform2f(u('uRes'), W, H);
     gl.uniform2f(u('uPan'), this.pan[0], this.pan[1]);
@@ -486,6 +491,8 @@ export class DPView {
     ctx.stroke();
     ctx.textAlign = 'left';
     ctx.fillText(`${nice} Å⁻¹ = ${fmt(nice * s.lambda * 1e3, 1)} mrad`, 12, r.height - 20);
+    ctx.textAlign = 'left';
+    ctx.fillText(this.cbed ? `CBED α ${fmt(p.convAlpha, 1)} mrad` : p.convAlpha > 0 ? `α ${fmt(p.convAlpha, 1)} mrad: disks < spot size, drawn as spots` : 'parallel beam', 8, 16);
     const st = this.blochStatus();
     if (st) {
       ctx.textAlign = 'right';
