@@ -1,10 +1,12 @@
 // End-to-end smoke test + benchmark in headless Chrome (system install, via playwright-core).
-// usage: node bench/e2e.mjs [--gpu|--swiftshader] [--url http://...] [--out bench/out]
-// Serves dist/ itself unless --url is given. Writes screenshots and timings.json to --out.
+// usage: node bench/e2e.mjs [--gpu|--swiftshader] [--url http://...] [--out DIR]
+// Serves dist/ itself unless --url is given. Writes screenshots and timings.json to --out
+// (default ~/scratch/zoner-bench: local disk, the repo may sit on a network mount).
 import { chromium } from 'playwright-core';
 import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
+import { homedir } from 'node:os';
 
 const args = process.argv.slice(2);
 const opt = (k, d) => {
@@ -12,7 +14,7 @@ const opt = (k, d) => {
   return i >= 0 ? args[i + 1] : d;
 };
 const mode = args.includes('--swiftshader') ? 'swiftshader' : 'gpu';
-const out = resolve(opt('--out', 'bench/out'));
+const out = resolve(opt('--out', join(homedir(), 'scratch', 'zoner-bench')));
 const root = resolve(opt('--root', 'dist'));
 await mkdir(out, { recursive: true });
 
@@ -66,10 +68,13 @@ const bench = async (label, setup) => {
   return page.evaluate(async ({ label, setup }) => {
     const z = window.zoner;
     if (setup) new Function('z', setup)(z);
-    const names = ['dp', 'map', 'imSum', 'imSlice', 'r3d'];
+    const names = ['dp', 'map', 'imgSum', 'imgSlice', 'r3d'];
     const res = { label };
+    const mode0 = z.store.p.imgMode;
     for (const n of names) {
-      const v = z[n];
+      const v = n.startsWith('img') ? z.img : z[n];
+      if (n === 'imgSum') z.store.p.imgMode = 'sum';
+      if (n === 'imgSlice') z.store.p.imgMode = 'slice';
       const gl = v.canvas.getContext('webgl2');
       const px = new Uint8Array(4);
       v.render();
@@ -85,6 +90,8 @@ const bench = async (label, setup) => {
       ts.sort((a, b) => a - b);
       res[n] = +ts[Math.floor(ts.length / 2)].toFixed(2);
     }
+    z.store.p.imgMode = mode0;
+    res.cbed = z.dp.cbed;
     return res;
   }, { label, setup });
 };
@@ -222,7 +229,7 @@ if (inMap) await page.mouse.click(mb.x + p0[0], mb.y + p0[1]);
 await page.waitForTimeout(700);
 const toastTxt = await page.locator('#toast').textContent();
 const angLim = await page.evaluate(() => window.zoner.angleTo([1, 1, 1]));
-check('beyond holder limits: clamped and reported', angLim > 0.2 && /beyond the holder limits/.test(toastTxt), { angLim, toastTxt });
+check('beyond holder limits: clamped and reported', angLim > 0.2 && /beyond the holder range/.test(toastTxt), { angLim, toastTxt });
 // Bloch wave inside the app: exact [110], symmetry-equivalent beams equal, sum = 1
 await page.evaluate(() => {
   const z = window.zoner;
@@ -294,12 +301,96 @@ const restored = await p2.evaluate(() => ({ c: window.zoner.store.p.crystal, a: 
 check('shared link restores crystal, tilt and parameters', restored.c === 'SrTiO3' && Math.abs(restored.a - 0.0123) < 1e-4 && Math.abs(restored.b + 0.0456) < 1e-4 && restored.t === 33, restored);
 await ctx2.close();
 
+// ---- session 2: layout, image toggle, legend, auto illumination, tilt rings, hover ----------
+await page.evaluate(() => {
+  const z = window.zoner;
+  z.trainer.stop();
+  localStorage.clear();
+});
+const fresh = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+const pf = await fresh.newPage();
+pf.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+pf.on('pageerror', (e) => errors.push(String(e)));
+await pf.goto(url);
+await pf.waitForFunction(() => window.zoner && window.zoner.dp.lastMs > 0 && window.zoner.img.lastMs > 0, null, { timeout: 30000 });
+await pf.waitForTimeout(500);
+const defaults = await pf.evaluate(() => ({ imgMode: window.zoner.store.p.imgMode, convAlpha: window.zoner.store.p.convAlpha, cbed: window.zoner.dp.cbed, rings: window.zoner.map.rings }));
+check('defaults: depth-sum image, convergent 3 mrad drawn as CBED disks', defaults.imgMode === 'sum' && defaults.convAlpha === 3 && defaults.cbed, defaults);
+check('stereogram draws tilt rings at 10 and 20 deg (half-range 20)', defaults.rings.includes(10) && defaults.rings.includes(20), defaults.rings);
+const layoutAt = async (w, h) => {
+  await pf.setViewportSize({ width: w, height: h });
+  await pf.waitForTimeout(400);
+  return pf.evaluate(() => {
+    const b = (id) => document.getElementById(id).getBoundingClientRect();
+    const g = document.getElementById('grid');
+    const se = document.scrollingElement;
+    const st = (id) => b(id).height;
+    const r = { dp: b('panel-dp'), r3d: b('panel-r3d'), map: b('panel-map'), img: b('panel-img') };
+    return {
+      pageScroll: se.scrollHeight - window.innerHeight,
+      gridScroll: g.scrollHeight - g.clientHeight,
+      bottom: Math.max(r.dp.bottom, r.r3d.bottom, r.map.bottom, r.img.bottom) - window.innerHeight,
+      grid2x2: Math.abs(r.dp.left - r.map.left) < 2 && Math.abs(r.r3d.left - r.img.left) < 2 && r.dp.right < r.r3d.left && r.dp.bottom < r.map.top && Math.abs(r.dp.top - r.r3d.top) < 2,
+      stageH: Math.min(st('dp-gl'), st('map-gl'), st('r3d-gl'), st('img-gl')),
+    };
+  });
+};
+for (const [w, h] of [[1920, 1080], [1600, 1000], [1366, 768], [1280, 720]]) {
+  const L = await layoutAt(w, h);
+  check(`${w}x${h}: 2x2 panels fit the window without scrolling`, L.pageScroll <= 0 && L.gridScroll <= 1 && L.bottom <= 0 && L.grid2x2 && L.stageH > 150, L);
+}
+await pf.setViewportSize({ width: 1600, height: 1000 });
+await pf.waitForTimeout(300);
+await pf.screenshot({ path: join(out, `layout-${mode}.png`) });
+// image toggle
+await pf.locator('#panel-img button', { hasText: 'MEP slice' }).click();
+await pf.waitForTimeout(300);
+const tog = await pf.evaluate(() => ({ m: window.zoner.store.p.imgMode, z: getComputedStyle(document.getElementById('img-z').parentElement).display, ms: window.zoner.img.msBy.slice }));
+await pf.screenshot({ path: join(out, `layout-slice-${mode}.png`) });
+await pf.locator('#panel-img button', { hasText: 'Depth sum' }).click();
+await pf.waitForTimeout(200);
+const tog2 = await pf.evaluate(() => window.zoner.store.p.imgMode);
+check('image panel toggles depth sum <-> MEP slice (z slider only for the slice)', tog.m === 'slice' && tog.z !== 'none' && tog.ms > 0 && tog2 === 'sum', { tog, tog2 });
+// legend
+await pf.evaluate(() => window.zoner.store.loadCrystal('SrTiO3'));
+await pf.waitForTimeout(400);
+const leg = await pf.locator('#r3d-legend').innerText();
+check('3D legend lists every species (SrTiO3: Sr, Ti, O)', /Sr/.test(leg) && /Ti/.test(leg) && /\bO\b/.test(leg), leg);
+// automatic illumination
+const ill = await pf.evaluate(async () => {
+  const z = window.zoner;
+  z.store.loadCrystal('Si');
+  const at = (a, r) => { z.store.p.convAlpha = a; z.store.p.dpRange = r; z.dp.render(); return z.dp.cbed; };
+  const out = { a0: at(0, 2.2), a05: at(0.5, 2.2), a05zoom: at(0.5, 0.1), a3: at(3, 2.2) };
+  z.store.p.dpRange = 2.2;
+  return out;
+});
+check('illumination is automatic: alpha 0 / small disks -> spots, larger or zoomed -> CBED', !ill.a0 && !ill.a05 && ill.a05zoom && ill.a3, ill);
+// hover readout on the map
+const mb2 = await pf.locator('#map-ov').boundingBox();
+await pf.mouse.move(mb2.x + mb2.width / 2 + 60, mb2.y + mb2.height / 2 - 30);
+await pf.waitForTimeout(100);
+const hov = await pf.locator('#map-lbl').innerText();
+check('stereogram hover shows the tilt from the beam and the alpha/beta needed', /from beam/.test(hov) && /α/.test(hov) && /β/.test(hov), hov);
+await fresh.close();
+
 // mobile layout
 await page.evaluate(() => window.zoner.trainer.stop());
 await page.setViewportSize({ width: 390, height: 844 });
 await page.waitForTimeout(600);
 await page.screenshot({ path: join(out, `mobile-${mode}.png`), fullPage: false });
 const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+const mob = await page.evaluate(() => {
+  const ids = ['panel-dp', 'panel-r3d', 'panel-map', 'panel-img', 'panel-info'];
+  const r = ids.map((id) => document.getElementById(id).getBoundingClientRect());
+  let ok = true;
+  for (let i = 1; i < r.length; i++) if (r[i].top < r[i - 1].bottom - 1) ok = false;
+  return { stacked: ok, stageH: document.getElementById('dp-gl').getBoundingClientRect().height };
+});
+check('phone: panels stack in one column without overlapping', mob.stacked && mob.stageH > 250 && !overflow, mob);
+await page.evaluate(() => window.scrollTo(0, 700));
+await page.waitForTimeout(300);
+await page.screenshot({ path: join(out, `mobile2-${mode}.png`), fullPage: false });
 
 const result = { mode, renderer, url, errors, checks, timings, bloch, mobileHorizontalOverflow: overflow };
 await writeFile(join(out, `timings-${mode}.json`), JSON.stringify(result, null, 2));
