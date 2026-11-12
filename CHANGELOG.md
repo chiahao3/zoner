@@ -27,6 +27,12 @@ Session 4 (branch `feat/session-4`, on top of session 3).
   20 nm: depth sum 7.2 rad on zone, 2.7 rad at 1°, 0.6 rad at 3°; the slice keeps half at 3°).
   The readout gives the image's own p-p against the global range.
 
+### Fixed
+- Stereogram double-click: on a zone marker it now keeps the snap onto the zone, and elsewhere it
+  goes to the direction that was under the pointer. The first click of a double-click used to
+  start the zone snap, and the double-click then re-read the half-rotated map and tilted 0.2–0.3°
+  off (present since 0.0.1).
+
 ### Changed
 - **Auto contrast is off by default.** On, it stretches each image to its own range as before.
   Off now means the global range above (the old "locked = keep the current range" is gone).

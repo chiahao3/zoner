@@ -18,7 +18,7 @@ Related: [README.md](README.md) (use, physics summary, deploy).
 | stack | Vite 7 + TypeScript 5.9 + three.js 0.187, raw WebGL2 shaders; static site, no backend |
 | installed | npm packages only, local to `node_modules/` (see `package.json`): three, vite, vitest 3, typescript 5, vite-plugin-singlefile, playwright-core (drives the system `/usr/bin/google-chrome`; no browser download), @types/three. No conda env was created. Node 20.20 (nvm) was already present |
 | tests | `npm test`: 85 vitest tests (29 physics, 9 depth weight, 47 UI helpers/state) |
-| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 39/39 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
+| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 40/40 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
 | builds | `npm run build:pages` produces `dist/` (site) and `dist/zoner.html` (~650 kB single file, runs from `file://`) |
 | deploy | `.github/workflows/pages.yml` (test, build, deploy on push to `main`). Needs a GitHub repo + Pages source "GitHub Actions" (§2) |
 
@@ -423,3 +423,8 @@ real microscope camera orientations (§2).
     unit tests (85), 2 more e2e checks (39/39 on GPU and SwiftShader, 0 console errors).
   - Follow-ups: DP illumination/detector labels moved to the top right (they overlapped the
     hover), hover on two lines; collection angle default 64 mrad (3.25 Å⁻¹, λ/β 0.308 Å).
+  - Bug report (stereogram double-click off target, zone snap lost): reproduced in headless Chrome
+    (double-click on the [110] marker ended 0.32° off; 0.16° at a 10° map range). Cause: click,
+    click, dblclick; the first click started the snap animation and the dblclick re-read the
+    half-rotated map. Pre-existing since 0.0.1, not the display range. Fixed by recording the
+    first click's meaning; e2e regression check (40/40 on GPU and SwiftShader).
