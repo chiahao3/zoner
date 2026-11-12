@@ -326,10 +326,10 @@ Median ms per re-render after a tilt, session 3 tip vs session 4 (each run with 
 | scene | renderer | DP | map | depth sum | MEP slice | 3D |
 |---|---|---|---|---|---|---|
 | Si [110] default, s3 / s4 | RTX 5000 | 2.4 / 2.4 | 2.5 / 2.6 | 2.7 / 2.9 | 2.8 / 2.8 | 6.6 / 7.1 |
-| Si λ/β (0.219 Å) (new) | RTX 5000 | 3.0 | 2.3 | 2.8 | 5.0 | 4.7 |
+| Si λ/β (64 mrad → 0.308 Å) (new) | RTX 5000 | 2.9 | 2.4 | 3.1 | 3.6 | 4.9 |
 | Si detector on, map synced (new) | RTX 5000 | 3.6 | 2.4 | 3.5 | 4.7 | 5.8 |
 | Si [110] default, s3 / s4 | SwiftShader | 40.9 / 26.7 | 96.6 / 100 | 24.5 / 23.3 | 10.1 / 11.0 | 224 / 225 |
-| Si λ/β (0.219 Å) (new) | SwiftShader | 35.8 | 104 | 40.9 | 7.9 | 125 |
+| Si λ/β (64 mrad → 0.308 Å) (new) | SwiftShader | 34.3 | 99.5 | 33.2 | 7.5 | 129 |
 | Si detector on, map synced (new) | SwiftShader | 38.1 | 98.7 | 21.2 | 5.3 | 126 |
 
 No change on existing rows beyond noise. λ/β costs what its finer lateral resolution costs.
@@ -413,7 +413,7 @@ real microscope camera orientations (§2).
     reverted at the user's request; nothing of it is in git.
   - 73 unit tests; e2e 32/32 on GPU and SwiftShader, 0 console errors; timings vs v0.0.2 (§8).
 - **2026-11-12, session 4** (`feat/session-4`, branched from `feat/session-3`). Requested:
-  collection angle (90 mrad), detector toggle on the DP, Å⁻¹ next to the angle fields, DP hover
+  collection angle (90 mrad, later 64), detector toggle on the DP, Å⁻¹ next to the angle fields, DP hover
   readout, λ/β checkbox, map FOV synced to the DP; mid-session: the detector is square, β = its
   half-width.
   - 9 unit tests first (82 total); 5 e2e checks (37/37 on GPU and SwiftShader, 0 console
@@ -421,3 +421,5 @@ real microscope camera orientations (§2).
     e2e clip check), and the hover printed "-0.00".
   - Last request: global display range per image mode (auto contrast off by default). 3 more
     unit tests (85), 2 more e2e checks (39/39 on GPU and SwiftShader, 0 console errors).
+  - Follow-ups: DP illumination/detector labels moved to the top right (they overlapped the
+    hover), hover on two lines; collection angle default 64 mrad (3.25 Å⁻¹, λ/β 0.308 Å).

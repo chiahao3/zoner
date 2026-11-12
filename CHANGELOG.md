@@ -8,9 +8,10 @@ versions follow [SemVer](https://semver.org/) (0.0.x while the UI is still movin
 Session 4 (branch `feat/session-4`, on top of session 3).
 
 ### Added
-- **Collection angle β** (mrad, default 90): the half-width of the square detector.
+- **Collection angle β** (mrad, default 64): the half-width of the square detector.
 - **Detector** button in the diffraction panel: draws the square detector about the optic axis
-  (aligned with the DP axes; corners at √2 β) and dims beyond it with red stripes.
+  (aligned with the DP axes; corners at √2 β) and dims beyond it with red stripes. The
+  illumination (CBED α) and detector labels sit at the top right, clear of the hover readout.
 - Convergence and collection fields are typed in mrad and show the reciprocal distance θ·K in
   brackets, e.g. "mrad (0.152 Å⁻¹)".
 - DP hover: angle from the beam of the direction whose Kikuchi centre is under the pointer, in
