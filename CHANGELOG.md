@@ -5,6 +5,11 @@ versions follow [SemVer](https://semver.org/) (0.0.x while the UI is still movin
 
 ## [Unreleased]
 
+### Added
+- README screenshot and link previews: `public/screenshot.png` (1600×838) is shown in the README
+  and set as the Open Graph / Twitter image of the site, so pasting the site link gives a
+  thumbnail. `npm run screenshot` (after `npm run build`) regenerates it.
+
 ## [0.0.5] - 2026-11-12
 
 ### Removed

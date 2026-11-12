@@ -12,7 +12,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "e2e": "node bench/e2e.mjs",
-    "build:pages": "npm run build && npm run build:single && node -e \"require('fs').copyFileSync('dist-single/zoner.html','dist/zoner.html')\""
+    "build:pages": "npm run build && npm run build:single && node -e \"require('fs').copyFileSync('dist-single/zoner.html','dist/zoner.html')\"",
+    "screenshot": "node bench/screenshot.mjs"
   },
   "license": "UNLICENSED",
   "dependencies": {
