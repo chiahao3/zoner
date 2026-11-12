@@ -33,6 +33,7 @@ export function decodeHash(s: Store, hash: string): boolean {
     if (typeof v === 'number' && !Number.isFinite(v)) continue;
     (s.p as unknown as Record<string, unknown>)[k] = v;
   }
+  s.syncAutoDepth();
   const m = q.get('m')?.split(',').map(Number);
   if (m && m.length === 9 && m.every(Number.isFinite)) s.holder = new Holder(orthonormalize(m));
   const a = parseFloat(q.get('a') ?? 'NaN'), b = parseFloat(q.get('b') ?? 'NaN');

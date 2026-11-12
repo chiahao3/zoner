@@ -1,5 +1,5 @@
 // Sidebar parameter controls generated from a schema; two-way bound to the store.
-import { Store, Params } from './state';
+import { Store, Params, DEPTH_RES_MAX } from './state';
 import { el } from './util';
 
 type Opt = string | [string, string];
@@ -13,6 +13,8 @@ interface Ctl {
   unit?: string;
   options?: Opt[];
   title?: string;
+  /** inline checkbox that fills this value automatically (unchecked when the value is typed) */
+  auto?: { key: keyof Params; label: string; title?: string };
 }
 interface Group {
   name: string;
@@ -40,8 +42,9 @@ export const GROUPS: Group[] = [
         title: 'FWHM of the lateral PSF; also the |g| cut-off of the resolution map',
       },
       {
-        key: 'depthRes', label: 'Depth resolution', type: 'number', min: 0, max: 100, step: 0.1, unit: 'nm',
+        key: 'depthRes', label: 'Depth resolution', type: 'number', min: 0, max: DEPTH_RES_MAX, step: 0.1, unit: 'nm',
         title: 'FWHM of the depth PSF of a reconstructed slice',
+        auto: { key: 'depthAuto', label: 'λ/α²', title: 'Fill the depth resolution with λ/α² from the high tension and the convergence angle α (kept updated). Typing a value unchecks it. α = 0 gives the maximum (no depth sectioning).' },
       },
       { key: 'sliceThickness', label: 'Slice thickness Δz', type: 'number', min: 0.1, max: 100, step: 0.1, unit: 'nm' },
       { key: 'sliceDepth', label: 'Slice depth z', type: 'range', min: 0, max: 20, step: 0.1, unit: 'nm', title: 'centre of the displayed MEP slice below the entrance surface' },
@@ -149,6 +152,15 @@ export class Controls {
       const out = el('span', { class: 'unit' });
       this.outs.set(c.key, out);
       wrap.append(out);
+    }
+    if (c.auto) {
+      const ak = c.auto.key;
+      const cb = el('input', { id: `ctl-${ak}`, type: 'checkbox' });
+      cb.addEventListener('change', () => s.set(ak, cb.checked as never));
+      const lb = el('label', { class: 'auto', for: `ctl-${ak}` }, cb, c.auto.label);
+      if (c.auto.title) lb.title = c.auto.title;
+      this.inputs.set(ak, cb);
+      wrap.append(lb);
     }
     row.append(wrap);
     if (c.unit) row.dataset.unit = c.unit;

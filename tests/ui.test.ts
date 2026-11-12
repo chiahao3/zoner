@@ -6,7 +6,7 @@ import { wavelength } from '../src/physics/constants';
 import { builtinCrystal, species } from '../src/physics/crystal';
 import { canvasSize, ringStep, ringAngles, placeLabels } from '../src/ui/layout';
 import { holderOutline, mountForZone, tiltToBring } from '../src/physics/orientation';
-import { Store, DEFAULTS } from '../src/ui/state';
+import { Store, DEFAULTS, autoDepthRes, DEPTH_RES_MAX } from '../src/ui/state';
 import { decodeHash, encodeHash } from '../src/ui/hash';
 import { GROUPS } from '../src/ui/controls';
 
@@ -122,8 +122,8 @@ describe('session 2b: defaults and synced source', () => {
   it('the stereogram has no separate source: it follows the image mode', () => {
     expect('mapSource' in DEFAULTS).toBe(false);
   });
-  it('no aperture-estimate buttons in the controls', () => {
-    for (const g of GROUPS) for (const c of g.ctls) expect('auto' in c).toBe(false);
+  it('no aperture-estimate buttons in the controls (session 3: only the depth resolution has an auto checkbox)', () => {
+    for (const g of GROUPS) for (const c of g.ctls) if (c.key !== 'depthRes') expect('auto' in c).toBe(false);
   });
   it('0.0.1 links: mapSource becomes the shared image/map mode', () => {
     const s = new Store();
@@ -231,5 +231,57 @@ describe('session 2d: holder range outline', () => {
       expect(Math.abs(t.alpha)).toBeLessThanOrEqual(aL + 1e-9);
       expect(Math.abs(t.beta)).toBeLessThanOrEqual(bL + 1e-9);
     }
+  });
+});
+
+describe('auto depth resolution (lambda / alpha^2)', () => {
+  it('lambda / alpha^2 in nm, rounded to 0.01 nm', () => {
+    expect(autoDepthRes(300, 25)).toBeCloseTo(wavelength(300) / 0.025 ** 2 / 10, 2);
+    expect(autoDepthRes(300, 25)).toBe(3.15);
+    expect(autoDepthRes(300, 3)).toBeCloseTo(218.75, 1);
+  });
+  it('alpha = 0 (parallel beam) has no depth resolution: capped at the maximum', () => {
+    expect(autoDepthRes(300, 0)).toBe(DEPTH_RES_MAX);
+    expect(autoDepthRes(300, 0.01)).toBe(DEPTH_RES_MAX);
+  });
+  it('off by default; the 3 nm default is unchanged', () => {
+    expect(DEFAULTS.depthAuto).toBe(false);
+    expect(new Store().p.depthRes).toBe(3);
+  });
+  it('checking it fills the depth resolution from kV and alpha, which then keep it updated', () => {
+    const s = new Store();
+    s.set('convAlpha', 25);
+    expect(s.p.depthRes).toBe(3);
+    s.set('depthAuto', true);
+    expect(s.p.depthRes).toBe(autoDepthRes(300, 25));
+    s.set('convAlpha', 20);
+    expect(s.p.depthRes).toBe(autoDepthRes(300, 20));
+    s.set('kV', 200);
+    expect(s.p.depthRes).toBe(autoDepthRes(200, 20));
+    expect(s.p.depthAuto).toBe(true);
+  });
+  it('typing a depth resolution unchecks it and keeps the typed value', () => {
+    const s = new Store();
+    s.set('depthAuto', true);
+    s.set('depthRes', 5);
+    expect(s.p.depthAuto).toBe(false);
+    expect(s.p.depthRes).toBe(5);
+    s.set('convAlpha', 30);
+    expect(s.p.depthRes).toBe(5);
+  });
+  it('links keep the auto setting', () => {
+    const a = new Store();
+    a.set('convAlpha', 22);
+    a.set('depthAuto', true);
+    const b = new Store();
+    decodeHash(b, encodeHash(a));
+    expect(b.p.depthAuto).toBe(true);
+    expect(b.p.convAlpha).toBe(22);
+    expect(b.p.depthRes).toBe(autoDepthRes(300, 22));
+  });
+  it('the depth-resolution control carries the auto checkbox and accepts the capped value', () => {
+    const ctl = GROUPS.flatMap((g) => g.ctls).find((c) => c.key === 'depthRes')!;
+    expect(ctl.auto?.key).toBe('depthAuto');
+    expect(ctl.max).toBeGreaterThanOrEqual(DEPTH_RES_MAX);
   });
 });

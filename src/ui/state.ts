@@ -16,6 +16,7 @@ export interface Params {
   thickness: number; // nm
   sliceThickness: number; // nm
   depthRes: number; // nm FWHM
+  depthAuto: boolean; // depthRes = lambda / alpha^2 from kV and convAlpha (a typed depthRes unchecks it)
   lateralRes: number; // A FWHM
   sliceDepth: number; // nm, depth of the MEP slice centre below the entrance surface
   dw: number; // A^2 Debye-Waller B for all sites
@@ -53,7 +54,7 @@ export interface Params {
 }
 
 export const DEFAULTS: Params = {
-  crystal: 'Si', kV: 300, convAlpha: 3, thickness: 20, sliceThickness: 2, depthRes: 3, lateralRes: 0.5,
+  crystal: 'Si', kV: 300, convAlpha: 3, thickness: 20, sliceThickness: 2, depthRes: 3, depthAuto: false, lateralRes: 0.5,
   sliceDepth: 10, dw: 0.5,
   dpTheory: 'twobeam', dpRange: 2.2, dpDisplay: 'auto', dpDecades: 3.5, dpSpot: 2.2, kikuchi: 0.5,
   dpLabels: true, dpLaue: false, dpCmap: 'gray', blochBeams: 61,
@@ -64,6 +65,14 @@ export const DEFAULTS: Params = {
 };
 
 const DEG = Math.PI / 180;
+/** Largest depth resolution (nm): the cap of lambda / alpha^2 as alpha -> 0, and the control's max. */
+export const DEPTH_RES_MAX = 1000;
+/** Depth resolution lambda / alpha^2 (nm, rounded to 0.01 nm) for the probe semi-angle alpha (mrad). */
+export function autoDepthRes(kV: number, alphaMrad: number): number {
+  const a = alphaMrad * 1e-3;
+  const d = wavelength(kV) / (a * a) / 10;
+  return Number.isFinite(d) && d < DEPTH_RES_MAX ? Math.round(d * 100) / 100 : DEPTH_RES_MAX;
+}
 /** Coarsest resolution still counted as atomic (A): top of the resolution colour scale. */
 export const D_ATOMIC = 1.5;
 
@@ -130,11 +139,18 @@ export class Store {
   set<K extends keyof Params>(key: K, value: Params[K]) {
     if (this.p[key] === value) return;
     this.p[key] = value;
+    if (key === 'depthRes') this.p.depthAuto = false; // typed by hand
+    this.syncAutoDepth();
     if (key === 'crystal') this.loadCrystal(value as string);
     else if (key === 'dw') {
       this.crystal = setDebyeWaller(this.crystalBase, this.p.dw);
       this.emit('crystal');
     } else this.emit('params');
+  }
+
+  /** With depthAuto on, depthRes follows lambda / alpha^2 (call after setting params directly). */
+  syncAutoDepth() {
+    if (this.p.depthAuto) this.p.depthRes = autoDepthRes(this.p.kV, this.p.convAlpha);
   }
 
   loadCrystal(name: string, zone?: Vec3) {
