@@ -222,6 +222,27 @@ await page.waitForTimeout(700);
 const toastTxt = await page.locator('#toast').textContent();
 const angLim = await page.evaluate(() => window.zoner.angleTo([1, 1, 1]));
 check('beyond holder limits: clamped and reported', angLim > 0.2 && /beyond the holder limits/.test(toastTxt), { angLim, toastTxt });
+// Bloch wave inside the app: exact [110], symmetry-equivalent beams equal, sum = 1
+await page.evaluate(() => {
+  const z = window.zoner;
+  z.store.loadCrystal('Si');
+  z.store.mountZone([1, 1, 0]);
+  z.store.set('dpTheory', 'bloch');
+  z.store.set('blochBeams', 61);
+});
+await page.waitForTimeout(900);
+const bl = await page.evaluate(() => {
+  const z = window.zoner;
+  const R = z.store.refl();
+  const I = (h) => z.dp.bloch.I.get(R.indexOf(h)) ?? -1;
+  let sum = z.dp.bloch.I0;
+  for (const v of z.dp.bloch.I.values()) sum += v;
+  return { status: z.dp.blochStatus(), i1: I([1, -1, 1]), i2: I([-1, 1, -1]), i3: I([1, -1, -1]), i4: I([-1, 1, 1]), i002: I([0, 0, 2]), sum, ms: z.dp.bloch.ms };
+});
+check('Bloch on [110]: 1-11 family equal, 002 excited by double diffraction, sum 1', /Bloch \d+ beams/.test(bl.status) && Math.abs(bl.i1 - bl.i2) < 1e-6 && Math.abs(bl.i1 - bl.i3) < 1e-6 && Math.abs(bl.i1 - bl.i4) < 1e-6 && bl.i002 > 1e-4 && Math.abs(bl.sum - 1) < 1e-6, bl);
+await page.screenshot({ path: join(out, `bloch-${mode}.png`) });
+await page.evaluate(() => window.zoner.store.set('dpTheory', 'twobeam'));
+
 // training: Z (go to nearest) solves the round
 await page.evaluate(() => window.zoner.trainer.begin('easy'));
 await page.waitForTimeout(300);
