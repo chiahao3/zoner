@@ -105,6 +105,9 @@ timings.push(await bench('Si kinematic parallel', "z.store.p.convAlpha=0; z.stor
 timings.push(await bench('Si lateral 0.3 A', "z.store.p.dpTheory='twobeam'; z.store.p.lateralRes=0.3;"));
 timings.push(await bench('SrTiO3 [001]', "z.store.p.lateralRes=0.5; z.store.loadCrystal('SrTiO3');"));
 timings.push(await bench('GaN [2-1-10]', "z.store.loadCrystal('GaN');"));
+timings.push(await bench('Si thin 0.5 nm, slice', "z.store.loadCrystal('Si'); z.store.p.thickness=0.5; z.store.p.sliceDepth=0.25;"));
+timings.push(await bench('Si auto depth (alpha 25 mrad -> 3.15 nm)', "z.store.p.thickness=20; z.store.p.sliceDepth=10; z.store.set('convAlpha', 25); z.store.set('depthAuto', true);"));
+await page.evaluate(() => { const s = window.zoner.store; s.set('depthAuto', false); s.p.depthRes = 3; s.p.convAlpha = 3; s.p.thickness = 20; s.p.sliceDepth = 10; });
 // Bloch timings at several N
 const bloch = await page.evaluate(async () => {
   const z = window.zoner;
@@ -317,10 +320,11 @@ await pf.waitForTimeout(500);
 const defaults = await pf.evaluate(() => {
   const z = window.zoner, p = z.store.p;
   return { imgMode: p.imgMode, convAlpha: p.convAlpha, cbed: z.dp.cbed, rings: z.map.rings.slice(), lateral: p.lateralRes, depth: p.depthRes, limits: p.enforceLimits,
-    estimateButtons: /λ\/2α|λ\/α²/.test(document.getElementById('side').innerText) };
+    estimateButtons: /λ\/2α/.test(document.getElementById('side').innerText) || document.querySelectorAll('#side button').length > 0,
+    depthAuto: document.getElementById('ctl-depthAuto')?.checked };
 });
-check('defaults: depth sum, 3 mrad CBED, 0.5 A / 3 nm, no rings, holder range off, no λ/2α buttons',
-  defaults.imgMode === 'sum' && defaults.convAlpha === 3 && defaults.cbed && defaults.rings.length === 0 && defaults.lateral === 0.5 && defaults.depth === 3 && !defaults.limits && !defaults.estimateButtons, defaults);
+check('defaults: depth sum, 3 mrad CBED, 0.5 A / 3 nm (λ/α² unchecked), no rings, holder range off, no λ/2α buttons',
+  defaults.imgMode === 'sum' && defaults.convAlpha === 3 && defaults.cbed && defaults.rings.length === 0 && defaults.lateral === 0.5 && defaults.depth === 3 && !defaults.limits && !defaults.estimateButtons && defaults.depthAuto === false, defaults);
 await pf.locator('#panel-map button', { hasText: 'Rings' }).click();
 await pf.waitForTimeout(300);
 const rings = await pf.evaluate(() => window.zoner.map.rings.slice());
@@ -448,6 +452,43 @@ await pf.mouse.move(mb2.x + mb2.width / 2 + 60, mb2.y + mb2.height / 2 - 30);
 await pf.waitForTimeout(100);
 const hov = await pf.locator('#map-lbl').innerText();
 check('stereogram hover shows the tilt from the beam and the alpha/beta needed', /from beam/.test(hov) && /α/.test(hov) && /β/.test(hov), hov);
+
+// ---- session 3: finite-specimen slice, auto depth resolution ---------------------------------
+// lambda/alpha^2 checkbox, driven through the sidebar
+await pf.evaluate(() => { const z = window.zoner; z.store.loadCrystal('Si'); z.markAll(); });
+await pf.locator('#ctl-depthAuto').check();
+await pf.waitForTimeout(150);
+const da1 = await pf.evaluate(() => ({ v: +document.getElementById('ctl-depthRes').value, p: window.zoner.store.p.depthRes }));
+await pf.locator('#ctl-convAlpha').fill('25');
+await pf.locator('#ctl-convAlpha').press('Tab');
+await pf.waitForTimeout(150);
+const da2 = await pf.evaluate(() => ({ v: +document.getElementById('ctl-depthRes').value, on: document.getElementById('ctl-depthAuto').checked }));
+await pf.locator('#ctl-depthRes').fill('4');
+await pf.locator('#ctl-depthRes').press('Tab');
+await pf.waitForTimeout(150);
+const da3 = await pf.evaluate(() => ({ p: window.zoner.store.p.depthRes, on: document.getElementById('ctl-depthAuto').checked, auto: window.zoner.store.p.depthAuto }));
+check('λ/α² checkbox fills the depth resolution (3 mrad: 218.75 nm, 25 mrad: 3.15 nm); typing a value unchecks it',
+  Math.abs(da1.v - 218.75) < 0.01 && da1.p === da1.v && Math.abs(da2.v - 3.15) < 1e-9 && da2.on && da3.p === 4 && !da3.on && !da3.auto, { da1, da2, da3 });
+await pf.evaluate(() => { const z = window.zoner; z.store.set('convAlpha', 3); z.store.set('depthRes', 3); });
+// thin specimen: the slice cannot tilt worse than the whole (0.5 nm) specimen
+const thin = await pf.evaluate(() => {
+  const z = window.zoner;
+  z.store.set('thickness', 0.5); z.store.set('sliceDepth', 0.25); z.store.set('imgMode', 'slice');
+  z.store.mountZone([1, 1, 0]);
+  z.store.setTilt(4 * Math.PI / 180, 1 * Math.PI / 180);
+  z.markAll();
+  return null;
+});
+await pf.waitForTimeout(400);
+const thinTxt = await pf.evaluate(() => {
+  const kv = [...document.querySelectorAll('#info .kv')].map((e) => e.innerText);
+  return { slice: kv.find((t) => /MEP slice/.test(t)), sum: kv.find((t) => /depth sum/.test(t)) };
+});
+const num = (t) => parseFloat((t ?? '').replace(/^[^\d>]*/, '').replace('>', ''));
+check('thin specimen (0.5 nm, 4° off): MEP slice resolution equals the depth sum (finite-specimen slice)',
+  thinTxt.slice && thinTxt.sum && Math.abs(num(thinTxt.slice.split('\n').pop()) - num(thinTxt.sum.split('\n').pop())) < 0.02, thinTxt);
+await pf.screenshot({ path: join(out, `thin-slice-${mode}.png`) });
+await pf.evaluate(() => { const s = window.zoner.store; s.set('thickness', 20); s.set('sliceDepth', 10); s.set('imgMode', 'sum'); s.setTilt(0, 0); window.zoner.markAll(); });
 await fresh.close();
 
 // mobile layout
