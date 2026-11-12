@@ -5,6 +5,22 @@ versions follow [SemVer](https://semver.org/) (0.0.x while the UI is still movin
 
 ## [Unreleased]
 
+Session 4 (branch `feat/session-4`, on top of session 3).
+
+### Added
+- **Collection angle β** (mrad, default 90): the half-width of the square detector.
+- **Detector** button in the diffraction panel: draws the square detector about the optic axis
+  (aligned with the DP axes; corners at √2 β) and dims beyond it with red stripes.
+- Convergence and collection fields are typed in mrad and show the reciprocal distance θ·K in
+  brackets, e.g. "mrad (0.152 Å⁻¹)".
+- DP hover: angle from the beam of the direction whose Kikuchi centre is under the pointer, in
+  degrees, mrad and Å⁻¹, with the α/β that bring it onto the beam (the map hover uses the same
+  format, now to 0.01°).
+- **λ/β** checkbox next to the lateral resolution (same rules as λ/α²). β = 0 gives the 5 Å cap.
+- **DP FOV** button on the stereogram: the map half-range follows the DP half-width
+  (asin(q/K)); zooming either panel keeps them matched; choosing a map range ends it. Tilt rings
+  get 0.1/0.2/0.5° steps for the small synced ranges.
+
 Session 3 (branch `feat/session-3`).
 
 ### Fixed

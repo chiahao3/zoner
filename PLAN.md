@@ -10,15 +10,15 @@ Related: [README.md](README.md) (use, physics summary, deploy).
 
 ---
 
-## 1. Start here (state at the end of session 3, 2026-11-12: `feat/session-3` on top of 0.0.2, not merged)
+## 1. Start here (state at the end of session 4, 2026-11-12: `feat/session-4` on top of `feat/session-3` on top of 0.0.2, neither merged)
 
 | item | state |
 |------|-------|
-| version | `0.0.2` on `main` (tag `v0.0.2`); session 3 work on `feat/session-3` (unmerged, CHANGELOG "Unreleased"). No remote yet. History: [CHANGELOG.md](CHANGELOG.md) |
+| version | `0.0.2` on `main` (tag `v0.0.2`); session 3 on `feat/session-3`, session 4 on `feat/session-4` (branched from it); both unmerged, CHANGELOG "Unreleased". No remote yet. History: [CHANGELOG.md](CHANGELOG.md) |
 | stack | Vite 7 + TypeScript 5.9 + three.js 0.187, raw WebGL2 shaders; static site, no backend |
 | installed | npm packages only, local to `node_modules/` (see `package.json`): three, vite, vitest 3, typescript 5, vite-plugin-singlefile, playwright-core (drives the system `/usr/bin/google-chrome`; no browser download), @types/three. No conda env was created. Node 20.20 (nvm) was already present |
-| tests | `npm test`: 73 vitest tests (29 physics, 9 depth weight, 35 UI helpers/state) |
-| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 32/32 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
+| tests | `npm test`: 82 vitest tests (29 physics, 9 depth weight, 44 UI helpers/state) |
+| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 37/37 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
 | builds | `npm run build:pages` produces `dist/` (site) and `dist/zoner.html` (~650 kB single file, runs from `file://`) |
 | deploy | `.github/workflows/pages.yml` (test, build, deploy on push to `main`). Needs a GitHub repo + Pages source "GitHub Actions" (§2) |
 
@@ -203,6 +203,15 @@ bench/e2e.mjs       headless Chrome: smoke, 23 checks, timings, screenshots (-> 
   time on SwiftShader; reverted. The prototype is archived in
   `~/scratch/zoner-bench/session3/amorphous-attempt/` (not in git). Frozen-phonon displacement was
   judged minor (DW B is already in F_g).
+- **Session 4: collection angle and derived values.** `collAngle` is the half-width of a square
+  detector (user: "our detector is usually square, so collection angle would be the radius"); the
+  DP draws it aligned with the DP axes, since there is no camera rotation yet (§3 P1). All three
+  follow-the-source values (λ/α² depth, λ/β lateral, map range = DP) go through
+  `Store.syncDerived` with one rule: setting the derived value by hand ends the link. The map
+  range synced to the DP is asin(dpRange/K), the tilt whose Kikuchi centre sits at the DP edge
+  (`dirAtQ` uses sin); e2e: the [110] marker sits at the same fraction of the half-width in both
+  panels (0.5597 vs 0.5596). Angles shown in Å⁻¹ use θ·K, as the CBED disks do. DP hover angle =
+  asin(|q|/K), checked against the go table at a Kikuchi centre.
 - **Links carry `v=2`.** Links without it are from 0.0.1; their `convAlpha` was the imaging
   aperture, so it is dropped and `dpIllum/dpAlpha` become the new α (unit-tested).
 
@@ -302,6 +311,21 @@ slower on SwiftShader because a 0.5 nm specimen passes many more reflections (wi
 transfer); the depth sum, whose formula did not change, costs the same, so it is the specimen,
 not the new weight.
 
+### Session 4: same machine, 1600×1000 window
+
+Median ms per re-render after a tilt, session 3 tip vs session 4 (each run with its own e2e).
+
+| scene | renderer | DP | map | depth sum | MEP slice | 3D |
+|---|---|---|---|---|---|---|
+| Si [110] default, s3 / s4 | RTX 5000 | 2.4 / 2.4 | 2.5 / 2.6 | 2.7 / 2.9 | 2.8 / 2.8 | 6.6 / 7.1 |
+| Si λ/β (0.219 Å) (new) | RTX 5000 | 3.0 | 2.3 | 2.8 | 5.0 | 4.7 |
+| Si detector on, map synced (new) | RTX 5000 | 3.6 | 2.4 | 3.5 | 4.7 | 5.8 |
+| Si [110] default, s3 / s4 | SwiftShader | 40.9 / 26.7 | 96.6 / 100 | 24.5 / 23.3 | 10.1 / 11.0 | 224 / 225 |
+| Si λ/β (0.219 Å) (new) | SwiftShader | 35.8 | 104 | 40.9 | 7.9 | 125 |
+| Si detector on, map synced (new) | SwiftShader | 38.1 | 98.7 | 21.2 | 5.3 | 126 |
+
+No change on existing rows beyond noise. λ/β costs what its finer lateral resolution costs.
+
 ## 9. Compatibility matrix
 
 Session 2: "parallel" means α = 0 or disks smaller than the spot size; "convergent" means
@@ -320,6 +344,10 @@ disks drawn (α > 0 and big enough at the current zoom).
 | training | works (forced α = 0) | n/a | works | works | works | works (touch drag; no keys) |
 | CIF without symops | n/a | n/a | n/a | treated as P1, with a toast warning | n/a | n/a |
 | finite-specimen slice weight | works | works | works | works | works | works |
+| λ/β auto lateral | β = 0 → 5 Å cap | works | works | works | slower: finer lateral → more reflections (capped 40k) | works |
+| square detector (DP) | works | works | works | works | works | works (no hover on touch) |
+| DP hover readout | works | works | works | works | works | n/a on touch |
+| map FOV synced to DP | works | works | works | works | works | works |
 | λ/α² auto depth | α = 0 → 1000 nm cap (slice ≈ depth sum) | works | works | works | works | works |
 | offline single file | works | works | works | works | works | works |
 | 0.0.1 links / saved state | migrated (v=2 marker) | migrated (dpAlpha → α) | n/a | n/a | n/a | n/a |
@@ -375,3 +403,10 @@ real microscope camera orientations (§2).
   - Off-zone periodicity: numerical study (§5), amorphous-layer GPU prototype built and then
     reverted at the user's request; nothing of it is in git.
   - 73 unit tests; e2e 32/32 on GPU and SwiftShader, 0 console errors; timings vs v0.0.2 (§8).
+- **2026-11-12, session 4** (`feat/session-4`, branched from `feat/session-3`). Requested:
+  collection angle (90 mrad), detector toggle on the DP, Å⁻¹ next to the angle fields, DP hover
+  readout, λ/β checkbox, map FOV synced to the DP; mid-session: the detector is square, β = its
+  half-width.
+  - 9 unit tests first (82 total); 5 e2e checks (37/37 on GPU and SwiftShader, 0 console
+    errors). Found by screenshots: the Å⁻¹ text was clipped in the sidebar (now two lines, with an
+    e2e clip check), and the hover printed "-0.00".
