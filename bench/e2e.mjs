@@ -402,6 +402,25 @@ check('holder switch: free tilt while off; on = same orientation read as the sta
 await pf.locator('#holder-box .switch').click();
 await pf.waitForTimeout(200);
 check('holder switch off releases the limits', await pf.evaluate(() => !window.zoner.store.p.enforceLimits), null);
+// activate at any time: matched far outside the range, press L without typing a reading
+const lk = await pf.evaluate(() => {
+  const z = window.zoner;
+  z.store.setTilt(50 * Math.PI / 180, -40 * Math.PI / 180);
+  return z.store.R();
+});
+await pf.waitForTimeout(200);
+await pf.locator('.brand').click();
+await pf.keyboard.press('l');
+await pf.waitForTimeout(300);
+const lk2 = await pf.evaluate((R0) => {
+  const z = window.zoner, R = z.store.R();
+  return { on: z.store.p.enforceLimits, a: z.store.holder.alpha, b: z.store.holder.beta, dR: Math.max(...R.map((x, i) => Math.abs(x - R0[i]))), toast: document.getElementById('toast').textContent };
+}, lk);
+check('L engages the holder range at any time (outside the range: taken as stage 0, 0; orientation kept)', lk2.on && Math.abs(lk2.a) < 1e-12 && Math.abs(lk2.b) < 1e-12 && lk2.dR < 1e-9, lk2);
+await pf.keyboard.press('l');
+await pf.waitForTimeout(200);
+const cs = await pf.evaluate(() => ({ off: !window.zoner.store.p.enforceLimits, range: window.zoner.store.dRange() }));
+check('L toggles off again; resolution colour scale is 0.5-1.5 A', cs.off && cs.range[0] === 0.5 && cs.range[1] === 1.5, cs);
 
 // hover readout on the map
 const mb2 = await pf.locator('#map-ov').boundingBox();

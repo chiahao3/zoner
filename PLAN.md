@@ -17,8 +17,8 @@ Related: [README.md](README.md) (use, physics summary, deploy).
 | version | `0.0.1` on `main` (tag `v0.0.1`, merged from `feat/v1-app`). Session 2 work is on `feat/session-2` (not merged; becomes 0.0.2). No remote yet. History: [CHANGELOG.md](CHANGELOG.md) |
 | stack | Vite 7 + TypeScript 5.9 + three.js 0.187, raw WebGL2 shaders; static site, no backend |
 | installed | npm packages only, local to `node_modules/` (see `package.json`): three, vite, vitest 3, typescript 5, vite-plugin-singlefile, playwright-core (drives the system `/usr/bin/google-chrome`; no browser download), @types/three. No conda env was created. Node 20.20 (nvm) was already present |
-| tests | `npm test`: 50 vitest tests (29 physics, 21 UI helpers/state) |
-| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 26/26 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
+| tests | `npm test`: 54 vitest tests (29 physics, 25 UI helpers/state) |
+| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 28/28 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
 | builds | `npm run build:pages` produces `dist/` (site) and `dist/zoner.html` (~650 kB single file, runs from `file://`) |
 | deploy | `.github/workflows/pages.yml` (test, build, deploy on push to `main`). Needs a GitHub repo + Pages source "GitHub Actions" (§2) |
 
@@ -157,12 +157,18 @@ bench/e2e.mjs       headless Chrome: smoke, 23 checks, timings, screenshots (-> 
 - **Holder range switch** (session 2b, user request): off by default so the simulated tilt can go
   anywhere while matching an observed pattern. Switching on calls `Store.engageHolder(α, β)`:
   M' = (Rx(α)Ry(β))ᵀ·R keeps the crystal orientation and makes the readout equal the stage reading;
-  readings outside the range are refused. The reading fields are prefilled with the current α/β, so
-  switching on without typing only enables the limits. Assumes the simulated holder axes match the
+  only an explicitly typed reading outside the range is refused. With nothing typed (third round:
+  "activate whenever"), the reading is `defaultStageReading()`: the current α/β if inside the range
+  (switching on then only enables the limits), else 0, 0, so a pattern matched far outside the range
+  can still be engaged. Re-engaging while on re-anchors. Shortcut L. Assumes the simulated holder axes match the
   real ones (camera rotation/flip is §3 P1).
 - **Map follows the image** (session 2b, user request): one `imgMode` for both. With the default
   depth sum through 20 nm the map's bright regions are small (tilt tolerance ≈ lateral/t ≈ 0.15°);
   that is correct and is the reason MEP slices help.
+- **Resolution colour scale capped at 1.5 Å** (user request: coarser is not atomic resolution).
+  `dRange()` = [lateral, max(1.5, 1.25·lateral)]; the same value is the metric's dWorst, so the
+  map, the zone markers and the orientation readout ("> 1.5 Å") agree, and zoneCutAngle prunes
+  more zones (slightly faster map).
 - **Tilt rings** (off by default since session 2b; hover gives the same number) measure the total tilt angle from the current beam (circles of radius tan(θ/2) on
   the beam-centred map), not |Δα|/|Δβ|, which are not concentric. The hover readout gives the
   holder α/β for any point, and the "go" table gives them for zones.
@@ -300,3 +306,6 @@ real microscope camera orientations (§2).
     3 nm), stereogram follows the image toggle, holder range switch with engage-at-stage-reading.
     Fixed arrow keys being swallowed by a focused checkbox. 50 unit tests, 26/26 e2e on GPU and
     SwiftShader; timings unchanged.
+  - Third round: resolution colour scale capped at 1.5 Å (readout agrees); holder switch engages at
+    any time (default reading current α/β inside the range, else 0, 0; re-anchors; L shortcut).
+    54 unit tests, 28/28 e2e on GPU and SwiftShader.

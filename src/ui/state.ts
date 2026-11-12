@@ -64,6 +64,8 @@ export const DEFAULTS: Params = {
 };
 
 const DEG = Math.PI / 180;
+/** Coarsest resolution still counted as atomic (A): top of the resolution colour scale. */
+export const D_ATOMIC = 1.5;
 
 export type ChangeKind = 'orientation' | 'params' | 'crystal';
 type Listener = (kinds: Set<ChangeKind>) => void;
@@ -195,10 +197,12 @@ export class Store {
   /**
    * Holder range switch. Engage the limits with the stage reading (deg) that the current orientation
    * corresponds to: the crystal keeps its orientation, the mount absorbs the difference, and from
-   * now on alpha/beta are clamped to the range. Defaults to the current alpha/beta (no re-mount).
-   * Returns false (and changes nothing) if the reading is outside the range.
+   * now on alpha/beta are clamped to the range. Works at any time, also while already engaged
+   * (re-anchors). Default reading: see defaultStageReading. Returns false (and changes nothing)
+   * only for an explicit reading outside the range.
    */
-  engageHolder(alphaDeg = this.holder.alpha / DEG, betaDeg = this.holder.beta / DEG): boolean {
+  engageHolder(alphaDeg?: number, betaDeg?: number): boolean {
+    if (alphaDeg === undefined || betaDeg === undefined) [alphaDeg, betaDeg] = this.defaultStageReading();
     if (!Number.isFinite(alphaDeg) || !Number.isFinite(betaDeg)) return false;
     if (Math.abs(alphaDeg) > this.p.alphaLim + 1e-9 || Math.abs(betaDeg) > this.p.betaLim + 1e-9) return false;
     const a = alphaDeg * DEG, b = betaDeg * DEG;
@@ -211,6 +215,12 @@ export class Store {
     this.emit('params');
     this.emit('orientation');
     return true;
+  }
+  /** Stage reading assumed when none is typed: the current alpha/beta if they are inside the range
+   *  (the mount already matches the stage), otherwise 0/0 (orientation matched freely). */
+  defaultStageReading(): [number, number] {
+    const a = this.holder.alpha / DEG, b = this.holder.beta / DEG;
+    return Math.abs(a) <= this.p.alphaLim && Math.abs(b) <= this.p.betaLim ? [a, b] : [0, 0];
   }
   releaseHolder() {
     this.p.enforceLimits = false;
@@ -261,8 +271,9 @@ export class Store {
     }
     return this._zs;
   }
-  /** Colour-scale limits of the resolution map (A): best = lateral limit, worst. */
+  /** Colour-scale limits of the resolution map (A): best = lateral limit, worst = 1.5 A (anything
+   *  coarser is not atomic resolution and is drawn grey / reported as "> 1.5 A"). */
   dRange(): [number, number] {
-    return [this.p.lateralRes, Math.max(2.5, 4 * this.p.lateralRes)];
+    return [this.p.lateralRes, Math.max(D_ATOMIC, 1.25 * this.p.lateralRes)];
   }
 }

@@ -160,3 +160,42 @@ describe('holder range switch: engage at the stage reading', () => {
     expect(s2.p.enforceLimits).toBe(false);
   });
 });
+
+describe('session 2c: resolution colour scale and holder switch that always engages', () => {
+  it('colour scale runs from the lateral resolution to 1.5 A (worse = not atomic, grey)', () => {
+    const s = new Store();
+    expect(s.dRange()).toEqual([0.5, 1.5]);
+    s.p.lateralRes = 0.3;
+    expect(s.dRange()).toEqual([0.3, 1.5]);
+    s.p.lateralRes = 2; // a coarse setting still gets a usable range
+    const [b, w] = s.dRange();
+    expect(b).toBe(2);
+    expect(w).toBeGreaterThan(2);
+  });
+  it('engages at any time: matched outside the range, the default reading is 0/0', () => {
+    const s = new Store();
+    s.setTilt(50 * DEG, -40 * DEG);
+    const R0 = s.R();
+    expect(s.defaultStageReading()).toEqual([0, 0]);
+    expect(s.engageHolder()).toBe(true);
+    expect(s.R().every((x, i) => Math.abs(x - R0[i]) < 1e-12)).toBe(true);
+    expect(s.holder.alpha).toBeCloseTo(0, 12);
+    expect(s.p.enforceLimits).toBe(true);
+  });
+  it('inside the range the default reading is the current alpha/beta', () => {
+    const s = new Store();
+    s.setTilt(12 * DEG, -3 * DEG);
+    const [a, b] = s.defaultStageReading();
+    expect(a).toBeCloseTo(12, 9);
+    expect(b).toBeCloseTo(-3, 9);
+  });
+  it('re-engaging while on re-anchors at the new reading', () => {
+    const s = new Store();
+    s.engageHolder(0, 0);
+    s.setTilt(20 * DEG, 0);
+    const R0 = s.R();
+    expect(s.engageHolder(5, 5)).toBe(true);
+    expect(s.R().every((x, i) => Math.abs(x - R0[i]) < 1e-12)).toBe(true);
+    expect(s.holder.alpha).toBeCloseTo(5 * DEG, 12);
+  });
+});

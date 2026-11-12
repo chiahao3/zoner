@@ -42,6 +42,13 @@ Session 2 (branch `feat/session-2`; becomes 0.0.2 when merged).
   current orientation as the stage α/β reading (prefilled, editable) and then enforces the range and
   hatches the map.
 
+### Changed (session 2, third round)
+- Resolution colour scale runs from the lateral resolution to 1.5 Å; anything coarser is not atomic
+  resolution, so it is grey on the map and reads "> 1.5 Å" in the orientation panel (was 2.5 Å).
+- The holder range switch engages at any time. With no reading typed, the stage reading is the
+  current α/β if inside the range, otherwise 0, 0 (the orientation is always kept). Re-engaging
+  re-anchors. New shortcut **L** toggles it, also with the orientation panel hidden.
+
 ### Fixed
 - Arrow keys stopped working after clicking a checkbox.
 - Canvases capped at their maximum backing size kept the cap per side, which stretched non-square

@@ -63,7 +63,7 @@ const hRead = el('div', { class: 'hread', id: 'holder-read' },
 const holderBox = el('div', { class: 'holderbox', id: 'holder-box' },
   el('label', { class: 'switch', title: 'Match the pattern first, then switch on: the current orientation is taken as the stage reading and the holder range is enforced' },
     swIn, el('span', { class: 'track' }), el('span', { text: 'Holder range' })),
-  hRange, hRead);
+  hRange, hRead, el('div', { class: 'muted hnote', id: 'holder-note' }));
 $('panel-info').querySelector('.stage')!.append(holderBox, el('div', { id: 'info' }));
 let stageEdited = false;
 for (const inp of [stA, stB]) {
@@ -79,7 +79,8 @@ for (const inp of [stA, stB]) {
 swIn.addEventListener('change', () => {
   const p = store.p;
   if (swIn.checked) {
-    const a = parseFloat(stA.value), b = parseFloat(stB.value);
+    // untouched fields: the exact default reading (the fields show it rounded)
+    const [a, b] = stageEdited ? [parseFloat(stA.value), parseFloat(stB.value)] : store.defaultStageReading();
     if (!store.engageHolder(a, b)) {
       swIn.checked = false;
       toast(`Stage reading α ${stA.value}°, β ${stB.value}° is outside the holder range (α −${p.alphaLim}…+${p.alphaLim}°, β −${p.betaLim}…+${p.betaLim}°).`);
@@ -96,10 +97,17 @@ function syncHolderBox() {
     ? `α −${p.alphaLim}° … +${p.alphaLim}°, β −${p.betaLim}° … +${p.betaLim}°`
     : `off: tilt freely to match the pattern, then switch on`;
   hRead.style.display = p.enforceLimits ? 'none' : '';
+  const [da, db] = store.defaultStageReading();
+  const outside = da === 0 && db === 0 && (store.holder.alpha !== 0 || store.holder.beta !== 0);
   if (!stageEdited && document.activeElement !== stA && document.activeElement !== stB) {
-    stA.value = (store.holder.alpha / DEG).toFixed(1);
-    stB.value = (store.holder.beta / DEG).toFixed(1);
+    stA.value = da.toFixed(1);
+    stB.value = db.toFixed(1);
   }
+  $('holder-note').textContent = p.enforceLimits
+    ? 'L or the switch: off to re-match, on again to re-anchor'
+    : outside && !stageEdited
+      ? 'current tilt is outside the range: switching on (L) takes it as stage 0, 0 unless you type the reading'
+      : 'switch on (or press L) when the pattern matches';
 }
 $('panel-r3d').querySelector('.stage')!.append(el('div', { class: 'legend', id: 'r3d-legend' }));
 const controls = new Controls(store, $('side'));
@@ -268,6 +276,10 @@ window.addEventListener('keydown', (e) => {
     case '0': store.setTilt(0, 0); break;
     case 't': case 'T': trainer.active ? trainer.stop() : trainer.begin(trainer.level); break;
     case 'h': case 'H': if (trainer.active) trainer.toggleHint(); break;
+    case 'l': case 'L':
+      swIn.checked = !store.p.enforceLimits;
+      swIn.dispatchEvent(new Event('change'));
+      break;
     case '?': ($('help') as HTMLDialogElement).showModal(); break;
     default: used = false;
   }
@@ -444,7 +456,7 @@ function renderInfo() {
   const rt = resolution2D(R, bc, s.transfer('sum'), zs, TAU, dW);
   const th = near[0]?.angle ?? 0;
   const dzEff = Math.max(p.sliceThickness, p.depthRes);
-  const fmtD = (r: { d: number; zone: Vec3 | null }) => (Number.isFinite(r.d) ? `${fmt(r.d, 2)} Å <span class="muted">(${htmlDir(L, r.zone!)})</span>` : `&gt; ${fmt(dW, 1)} Å`);
+  const fmtD = (r: { d: number; zone: Vec3 | null }) => (Number.isFinite(r.d) && r.d <= dW ? `${fmt(r.d, 2)} Å <span class="muted">(${htmlDir(L, r.zone!)})</span>` : `&gt; ${fmt(dW, 1)} Å`);
   info.innerHTML = `
     <div class="tiltrow"><span class="${lim(a, p.alphaLim)}">α <b>${fmt(a, 2)}°</b></span><span class="${lim(b, p.betaLim)}">β <b>${fmt(b, 2)}°</b></span>
     <span class="muted">beam ∥ [${uvw.map((x) => fmt(x / mx, 3)).join(' ')}]</span></div>
