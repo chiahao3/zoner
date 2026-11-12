@@ -12,12 +12,14 @@ import { TransferParams, ZoneSet, buildZoneSet } from '../physics/transfer';
 export interface Params {
   crystal: string;
   kV: number;
-  convAlpha: number; // mrad, probe semi-angle: DP disks (0 = parallel) and the lambda/alpha estimates
+  convAlpha: number; // mrad, probe semi-angle: DP disks (0 = parallel) and the lambda/alpha^2 depth
+  collAngle: number; // mrad, square detector half-width (centre to edge): DP detector range and lambda/beta
   thickness: number; // nm
   sliceThickness: number; // nm
   depthRes: number; // nm FWHM
   depthAuto: boolean; // depthRes = lambda / alpha^2 from kV and convAlpha (a typed depthRes unchecks it)
   lateralRes: number; // A FWHM
+  lateralAuto: boolean; // lateralRes = lambda / beta (collection angle); a typed lateralRes unchecks it
   sliceDepth: number; // nm, depth of the MEP slice centre below the entrance surface
   dw: number; // A^2 Debye-Waller B for all sites
   // diffraction
@@ -29,6 +31,7 @@ export interface Params {
   kikuchi: number; // 0..1
   dpLabels: boolean;
   dpLaue: boolean;
+  dpDetector: boolean; // detector (collection) range drawn on the DP, beyond it dimmed
   dpCmap: string;
   blochBeams: number;
   // images
@@ -38,6 +41,7 @@ export interface Params {
   imgAuto: boolean;
   // stereogram
   mapRange: number; // deg half-width
+  mapSyncDP: boolean; // mapRange follows the DP half-width (asin(dpRange / K)); choosing a range ends it
   mapZoneIdx: number;
   mapTraces: boolean;
   mapRings: boolean; // dashed tilt rings (the hover readout gives the same numbers)
@@ -54,12 +58,12 @@ export interface Params {
 }
 
 export const DEFAULTS: Params = {
-  crystal: 'Si', kV: 300, convAlpha: 3, thickness: 20, sliceThickness: 2, depthRes: 3, depthAuto: false, lateralRes: 0.5,
+  crystal: 'Si', kV: 300, convAlpha: 3, collAngle: 90, thickness: 20, sliceThickness: 2, depthRes: 3, depthAuto: false, lateralRes: 0.5, lateralAuto: false,
   sliceDepth: 10, dw: 0.5,
   dpTheory: 'twobeam', dpRange: 2.2, dpDisplay: 'auto', dpDecades: 3.5, dpSpot: 2.2, kikuchi: 0.5,
-  dpLabels: true, dpLaue: false, dpCmap: 'gray', blochBeams: 61,
+  dpLabels: true, dpLaue: false, dpDetector: false, dpCmap: 'gray', blochBeams: 61,
   imgMode: 'sum', imgFov: 20, imgCmap: 'gray', imgAuto: true,
-  mapRange: 20, mapZoneIdx: 3, mapTraces: true, mapRings: false, mapCmap: 'viridis',
+  mapRange: 20, mapSyncDP: false, mapZoneIdx: 3, mapTraces: true, mapRings: false, mapCmap: 'viridis',
   view3d: 'slab', slabWidth: 14, atomScale: 1,
   alphaLim: 35, betaLim: 30, enforceLimits: false, step: 0.2,
 };
@@ -73,6 +77,16 @@ export function autoDepthRes(kV: number, alphaMrad: number): number {
   const d = wavelength(kV) / (a * a) / 10;
   return Number.isFinite(d) && d < DEPTH_RES_MAX ? Math.round(d * 100) / 100 : DEPTH_RES_MAX;
 }
+/** Largest lateral resolution (A): the cap of lambda / beta as beta -> 0, and the control's max. */
+export const LATERAL_RES_MAX = 5;
+/** Lateral resolution lambda / beta (A, rounded to 0.001 A) for the collection angle beta (mrad). */
+export function autoLateralRes(kV: number, betaMrad: number): number {
+  const d = wavelength(kV) / (betaMrad * 1e-3);
+  return Number.isFinite(d) && d < LATERAL_RES_MAX ? Math.round(d * 1000) / 1000 : LATERAL_RES_MAX;
+}
+/** Map half-range (deg) matching a DP half-width (1/A): the tilt whose Kikuchi centre sits at the
+ *  edge of the DP, asin(q / K). */
+export const syncedMapRange = (dpRange: number, K: number) => (Math.asin(Math.min(1, dpRange / K)) * 180) / Math.PI;
 /** Coarsest resolution still counted as atomic (A): top of the resolution colour scale. */
 export const D_ATOMIC = 1.5;
 
@@ -139,8 +153,11 @@ export class Store {
   set<K extends keyof Params>(key: K, value: Params[K]) {
     if (this.p[key] === value) return;
     this.p[key] = value;
-    if (key === 'depthRes') this.p.depthAuto = false; // typed by hand
-    this.syncAutoDepth();
+    // a value set by hand ends its automatic source
+    if (key === 'depthRes') this.p.depthAuto = false;
+    if (key === 'lateralRes') this.p.lateralAuto = false;
+    if (key === 'mapRange') this.p.mapSyncDP = false;
+    this.syncDerived();
     if (key === 'crystal') this.loadCrystal(value as string);
     else if (key === 'dw') {
       this.crystal = setDebyeWaller(this.crystalBase, this.p.dw);
@@ -148,9 +165,13 @@ export class Store {
     } else this.emit('params');
   }
 
-  /** With depthAuto on, depthRes follows lambda / alpha^2 (call after setting params directly). */
-  syncAutoDepth() {
-    if (this.p.depthAuto) this.p.depthRes = autoDepthRes(this.p.kV, this.p.convAlpha);
+  /** Values that follow others (call after setting params directly): depthRes = lambda / alpha^2,
+   *  lateralRes = lambda / beta, mapRange = the DP half-width, each while its switch is on. */
+  syncDerived() {
+    const p = this.p;
+    if (p.depthAuto) p.depthRes = autoDepthRes(p.kV, p.convAlpha);
+    if (p.lateralAuto) p.lateralRes = autoLateralRes(p.kV, p.collAngle);
+    if (p.mapSyncDP) p.mapRange = syncedMapRange(p.dpRange, this.K);
   }
 
   loadCrystal(name: string, zone?: Vec3) {

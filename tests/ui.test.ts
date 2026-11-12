@@ -4,9 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { beamMode } from '../src/physics/diffraction';
 import { wavelength } from '../src/physics/constants';
 import { builtinCrystal, species } from '../src/physics/crystal';
-import { canvasSize, ringStep, ringAngles, placeLabels } from '../src/ui/layout';
+import { canvasSize, ringStep, ringAngles, placeLabels, mradToInvA, angleUnitText, dpHoverAngle } from '../src/ui/layout';
 import { holderOutline, mountForZone, tiltToBring } from '../src/physics/orientation';
-import { Store, DEFAULTS, autoDepthRes, DEPTH_RES_MAX } from '../src/ui/state';
+import { Store, DEFAULTS, autoDepthRes, DEPTH_RES_MAX, autoLateralRes, LATERAL_RES_MAX, syncedMapRange } from '../src/ui/state';
 import { decodeHash, encodeHash } from '../src/ui/hash';
 import { GROUPS } from '../src/ui/controls';
 
@@ -123,7 +123,7 @@ describe('session 2b: defaults and synced source', () => {
     expect('mapSource' in DEFAULTS).toBe(false);
   });
   it('no aperture-estimate buttons in the controls (session 3: only the depth resolution has an auto checkbox)', () => {
-    for (const g of GROUPS) for (const c of g.ctls) if (c.key !== 'depthRes') expect('auto' in c).toBe(false);
+    for (const g of GROUPS) for (const c of g.ctls) if (c.key !== 'depthRes' && c.key !== 'lateralRes') expect('auto' in c).toBe(false);
   });
   it('0.0.1 links: mapSource becomes the shared image/map mode', () => {
     const s = new Store();
@@ -283,5 +283,92 @@ describe('auto depth resolution (lambda / alpha^2)', () => {
     const ctl = GROUPS.flatMap((g) => g.ctls).find((c) => c.key === 'depthRes')!;
     expect(ctl.auto?.key).toBe('depthAuto');
     expect(ctl.max).toBeGreaterThanOrEqual(DEPTH_RES_MAX);
+  });
+});
+
+describe('session 4: collection angle, detector range, derived 1/A, DP hover, lambda/beta, map FOV sync', () => {
+  const K = 1 / wavelength(300);
+  it('defaults: collection angle 90 mrad; detector range, lambda/beta and map sync off', () => {
+    expect(DEFAULTS.collAngle).toBe(90);
+    expect(DEFAULTS.dpDetector).toBe(false);
+    expect(DEFAULTS.lateralAuto).toBe(false);
+    expect(DEFAULTS.mapSyncDP).toBe(false);
+  });
+  it('angles in mrad convert to 1/A as theta * K, shown in parentheses', () => {
+    expect(mradToInvA(3, 300)).toBeCloseTo(3e-3 * K, 12);
+    expect(mradToInvA(90, 300)).toBeCloseTo(4.571, 3);
+    expect(angleUnitText(3, 300)).toBe('mrad (0.152 Å⁻¹)');
+    expect(angleUnitText(90, 300)).toBe('mrad (4.57 Å⁻¹)');
+    expect(angleUnitText(0, 300)).toBe('mrad (0 Å⁻¹)');
+  });
+  it('the convergence and collection fields carry the derived 1/A text (and stay in mrad)', () => {
+    const ctls = GROUPS.flatMap((g) => g.ctls);
+    for (const k of ['convAlpha', 'collAngle'] as const) {
+      const c = ctls.find((x) => x.key === k)!;
+      expect(c.unit).toBe('mrad');
+      expect(c.derived?.({ ...DEFAULTS })).toMatch(/^mrad \([\d.]+ Å⁻¹\)$/);
+    }
+  });
+  it('lambda / beta in A (0.001 A), beta = 0 capped', () => {
+    expect(autoLateralRes(300, 90)).toBe(0.219);
+    expect(autoLateralRes(300, 90)).toBeCloseTo(wavelength(300) / 0.09, 3);
+    expect(autoLateralRes(300, 0)).toBe(LATERAL_RES_MAX);
+  });
+  it('lambda / beta checkbox: fills, follows kV and the collection angle, a typed value unchecks it', () => {
+    const s = new Store();
+    s.set('lateralAuto', true);
+    expect(s.p.lateralRes).toBe(autoLateralRes(300, 90));
+    s.set('collAngle', 60);
+    expect(s.p.lateralRes).toBe(autoLateralRes(300, 60));
+    s.set('kV', 200);
+    expect(s.p.lateralRes).toBe(autoLateralRes(200, 60));
+    s.set('lateralRes', 0.4);
+    expect(s.p.lateralAuto).toBe(false);
+    s.set('collAngle', 30);
+    expect(s.p.lateralRes).toBe(0.4);
+    const ctl = GROUPS.flatMap((g) => g.ctls).find((c) => c.key === 'lateralRes')!;
+    expect(ctl.auto?.key).toBe('lateralAuto');
+  });
+  it('links keep lambda / beta, the collection angle, the detector range and the map sync', () => {
+    const a = new Store();
+    a.set('collAngle', 120);
+    a.set('lateralAuto', true);
+    a.set('dpDetector', true);
+    a.set('mapSyncDP', true);
+    const b = new Store();
+    decodeHash(b, encodeHash(a));
+    expect(b.p.collAngle).toBe(120);
+    expect(b.p.lateralAuto).toBe(true);
+    expect(b.p.lateralRes).toBe(autoLateralRes(300, 120));
+    expect(b.p.dpDetector).toBe(true);
+    expect(b.p.mapSyncDP).toBe(true);
+    expect(b.p.mapRange).toBeCloseTo(syncedMapRange(b.p.dpRange, b.K), 12);
+  });
+  it('map FOV sync: the map half-range equals the DP half-width, asin(q / K)', () => {
+    expect(syncedMapRange(2.2, K)).toBeCloseTo(Math.asin(2.2 / K) / DEG, 12);
+    const s = new Store();
+    s.set('mapSyncDP', true);
+    expect(s.p.mapRange).toBeCloseTo(syncedMapRange(DEFAULTS.dpRange, s.K), 12);
+    s.set('dpRange', 5);
+    expect(s.p.mapRange).toBeCloseTo(syncedMapRange(5, s.K), 12);
+    s.set('kV', 120);
+    expect(s.p.mapRange).toBeCloseTo(syncedMapRange(5, s.K), 12);
+    s.set('mapRange', 30); // choosing a map range by hand ends the sync
+    expect(s.p.mapSyncDP).toBe(false);
+    expect(s.p.mapRange).toBe(30);
+  });
+  it('DP hover: the angle from the beam of a Kikuchi centre at q, in deg, mrad and 1/A', () => {
+    const q: [number, number] = [K * Math.sin(1 * DEG) * 0.6, K * Math.sin(1 * DEG) * 0.8];
+    const h = dpHoverAngle(q, K);
+    expect(h.deg).toBeCloseTo(1, 10);
+    expect(h.mrad).toBeCloseTo(1000 * DEG, 10);
+    expect(h.invA).toBeCloseTo(K * Math.sin(1 * DEG), 10);
+  });
+  it('rings: fine steps for small (synced) ranges, labels without float noise', () => {
+    expect(ringStep(2.5)).toBe(1);
+    expect(ringStep(1.2)).toBe(0.5);
+    expect(ringStep(0.5)).toBe(0.2);
+    expect(ringAngles(0.5, 0.75)).toEqual([0.2, 0.4, 0.6]);
+    expect(ringAngles(0.25, 0.4)).toEqual([0.1, 0.2, 0.3, 0.4]);
   });
 });

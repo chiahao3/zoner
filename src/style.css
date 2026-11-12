@@ -81,6 +81,7 @@ details.grp summary { cursor: pointer; font-weight: 600; padding: 3px 0; }
 .ctl input[type='range'] { flex: 1; min-width: 60px; }
 .ctl select { width: 100%; }
 .unit { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.unit.derived { white-space: pre; line-height: 1.2; font-size: 10.5px; }
 .ctl label.auto { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: 11px; white-space: nowrap; cursor: pointer; }
 .ctl label.auto input { margin: 0; padding: 0; width: 13px; height: 13px; flex: none; }
 

@@ -13,7 +13,8 @@ import { formula } from './physics/crystal';
 import { nearestZones, htmlDir } from './physics/zones';
 import { tiltToBring } from './physics/orientation';
 import { resolution2D, passWidth, TAU } from './physics/transfer';
-import { el, fmt, DEG, axisAngle, Vec3, matVec, angleBetween } from './ui/util';
+import { el, fmt, DEG, axisAngle, Vec3, matVec, transpose, angleBetween } from './ui/util';
+import { dpHoverAngle } from './ui/layout';
 import { stereoForward } from './physics/stereo';
 
 const store = new Store();
@@ -41,14 +42,16 @@ const zOut = el('span', { class: 'unit', id: 'img-z-out' });
 const zWrap = el('span', { class: 'zwrap' }, zRange, zOut);
 const seg = el('span', { class: 'seg' }, imgBtns.sum, imgBtns.slice);
 const ringsBtn = btn('Rings', 'dashed rings of total tilt from the current beam (hover gives the same number)');
+const syncBtn = btn('DP FOV', 'match the map\'s field of view to the diffraction pattern: the map edge is the tilt whose Kikuchi centre sits at the DP edge; zooming either panel keeps them matched (choosing a map range ends it)');
+const detBtn = btn('Detector', 'show the square detector (half-width = collection angle β) on the pattern; beyond it is dimmed');
 const srcLbl = el('span', { class: 'unit', id: 'map-src', title: 'the map is coloured by the resolution of the image shown (toggle in the image panel)' });
 // 2x2 workspace: diffraction space on the left (DP, stereogram), real space on the right
 // (structure model, image); orientation info in the right-hand rail.
 const grid = $('grid');
 grid.append(
-  panel('dp', 'Diffraction'),
+  panel('dp', 'Diffraction', [detBtn]),
   panel('r3d', 'Crystal model', v3dBtns),
-  panel('map', 'Resolution stereogram', [srcLbl, ringsBtn]),
+  panel('map', 'Resolution stereogram', [srcLbl, syncBtn, ringsBtn]),
   panel('img', 'Real-space image', [zWrap, seg]),
 );
 $('rail').append(panel('info', 'Orientation', [], 'html'));
@@ -130,9 +133,13 @@ function syncImgTools() {
   if (document.activeElement !== zr) zr.value = String(p.sliceDepth);
   zOut.textContent = `z ${fmt(p.sliceDepth, 1)} nm`;
   ringsBtn.classList.toggle('on', p.mapRings);
+  syncBtn.classList.toggle('on', p.mapSyncDP);
+  detBtn.classList.toggle('on', p.dpDetector);
   srcLbl.textContent = p.imgMode === 'sum' ? 'depth sum' : 'MEP slice';
 }
 ringsBtn.onclick = () => store.set('mapRings', !store.p.mapRings);
+syncBtn.onclick = () => store.set('mapSyncDP', !store.p.mapSyncDP);
+detBtn.onclick = () => store.set('dpDetector', !store.p.dpDetector);
 let infoDirty = true;
 
 const trainer = new Trainer(store, () => {
@@ -188,7 +195,7 @@ attachPointer($('dp-ov'), store, {
     dp.pan = [dp.pan[0] - dx / sc, dp.pan[1] + dy / sc];
     dp.dirty = true;
   },
-  onWheel: (dy) => store.set('dpRange', +Math.min(15, Math.max(0.15, store.p.dpRange * Math.exp(dy * 0.001))).toFixed(3)),
+  onWheel: (dy) => zoomDP(dy),
   onDbl: () => goNearest(),
 }, endInteraction);
 
@@ -206,12 +213,42 @@ attachPointer($('map-ov'), store, {
     if (P[0] ** 2 + P[1] ** 2 < 1) animateToDir(map.crystalDirAt(P));
   },
   onWheel: (dy) => {
+    if (store.p.mapSyncDP) return zoomDP(dy); // synced: zoom both panels together
     const opts = [3, 5, 10, 20, 30, 45, 60, 90];
     const i = opts.indexOf(store.p.mapRange);
     const j = Math.max(0, Math.min(opts.length - 1, (i < 0 ? 4 : i) + (dy > 0 ? 1 : -1)));
     store.set('mapRange', opts[j]);
   },
 }, endInteraction);
+
+function zoomDP(dy: number) {
+  store.set('dpRange', +Math.min(15, Math.max(0.15, store.p.dpRange * Math.exp(dy * 0.001))).toFixed(3));
+}
+
+/** Hover text shared by the DP and the map: tilt from the beam and the holder alpha/beta that
+ *  bring crystal direction u onto the beam (flagged when beyond the holder range). */
+function tiltReadout(u: Vec3, extra: string, thDeg: number) {
+  const t = tiltToBring(store.holder.mount, u);
+  const p = store.p;
+  const out = p.enforceLimits && (Math.abs(t.alpha) > p.alphaLim * DEG || Math.abs(t.beta) > p.betaLim * DEG);
+  const f2 = (x: number) => fmt(Math.abs(x) < 0.005 ? 0 : x, 2); // no "-0.00"
+  return `<div class="hover${out ? ' out' : ''}">${fmt(thDeg, thDeg < 10 ? 2 : 1)}° from beam${extra} · α ${f2(t.alpha / DEG)}° β ${f2(t.beta / DEG)}°${out ? ' (beyond range)' : ''}</div>`;
+}
+// DP pointer readout: the direction whose Kikuchi centre is under the pointer (its angle from the
+// beam in deg, mrad and 1/A, which is also the scattering angle of a spot there) and its alpha/beta
+const dpLbl = $('dp-lbl');
+$('dp-ov').addEventListener('pointermove', (e) => {
+  if (e.buttons || trainer.active) {
+    dpLbl.innerHTML = '';
+    return;
+  }
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const q = dp.toQ(e.clientX - r.left, e.clientY - r.top);
+  const h = dpHoverAngle(q, store.K);
+  const u = matVec(transpose(store.R()), dp.dirAtQ(q));
+  dpLbl.innerHTML = tiltReadout(u, ` (${fmt(h.mrad, h.mrad < 100 ? 1 : 0)} mrad, ${fmt(h.invA, h.invA < 1 ? 3 : 2)} Å⁻¹)`, h.deg);
+});
+$('dp-ov').addEventListener('pointerleave', () => (dpLbl.innerHTML = ''));
 
 // stereogram pointer readout: total tilt from the beam, and the alpha/beta that would bring the
 // direction under the pointer onto the beam (DOM text, so no map re-render on hover)
@@ -228,10 +265,7 @@ $('map-ov').addEventListener('pointermove', (e) => {
     return;
   }
   const th = 2 * Math.atan(Math.hypot(P[0], P[1]));
-  const t = tiltToBring(store.holder.mount, map.crystalDirAt(P));
-  const p = store.p;
-  const out = p.enforceLimits && (Math.abs(t.alpha) > p.alphaLim * DEG || Math.abs(t.beta) > p.betaLim * DEG);
-  mapLbl.innerHTML = `<div class="hover${out ? ' out' : ''}">${fmt(th / DEG, 1)}° from beam · α ${fmt(t.alpha / DEG, 1)}° β ${fmt(t.beta / DEG, 1)}°${out ? ' (beyond range)' : ''}</div>`;
+  mapLbl.innerHTML = tiltReadout(map.crystalDirAt(P), '', th / DEG);
 });
 $('map-ov').addEventListener('pointerleave', () => (mapLbl.innerHTML = ''));
 
