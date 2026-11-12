@@ -20,6 +20,15 @@ Session 4 (branch `feat/session-4`, on top of session 3).
 - **DP FOV** button on the stereogram: the map half-range follows the DP half-width
   (asin(q/K)); zooming either panel keeps them matched; choosing a map range ends it. Tilt rings
   get 0.1/0.2/0.5° steps for the small synced ranges.
+- **Global display range** for the real-space image, one per mode (depth sum, MEP slice): the
+  phase range of the same image with the crystal's low-index zone (Si [110], SrTiO3 [001],
+  GaN [2-1-10]) exactly on the beam. A mistilted crystal shows its real loss of contrast (Si,
+  20 nm: depth sum 7.2 rad on zone, 2.7 rad at 1°, 0.6 rad at 3°; the slice keeps half at 3°).
+  The readout gives the image's own p-p against the global range.
+
+### Changed
+- **Auto contrast is off by default.** On, it stretches each image to its own range as before.
+  Off now means the global range above (the old "locked = keep the current range" is gone).
 
 Session 3 (branch `feat/session-3`).
 
