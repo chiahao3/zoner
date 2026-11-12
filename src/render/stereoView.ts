@@ -291,7 +291,7 @@ export class StereoView {
     const tp = s.transfer(p.imgMode);
     const zs = s.zoneSet();
     const [db, dwst] = this.dRange();
-    const okey = `${p.crystal}|${p.dw}|${p.kV}|${p.lateralRes}|${p.imgMode}|${p.sliceThickness}|${p.depthRes}|${p.thickness}|${p.mapZoneIdx}`;
+    const okey = `${p.crystal}|${p.dw}|${p.kV}|${p.lateralRes}|${p.imgMode}|${p.sliceThickness}|${p.sliceDepth}|${p.depthRes}|${p.thickness}|${p.mapZoneIdx}`;
     if (okey !== this.onZoneKey) {
       this.onZone.clear();
       this.onZoneKey = okey;

@@ -12,7 +12,7 @@ import { parseCIF } from './physics/cif';
 import { formula } from './physics/crystal';
 import { nearestZones, htmlDir } from './physics/zones';
 import { tiltToBring } from './physics/orientation';
-import { resolution2D, TAU } from './physics/transfer';
+import { resolution2D, passWidth, TAU } from './physics/transfer';
 import { el, fmt, DEG, axisAngle, Vec3, matVec, angleBetween } from './ui/util';
 import { stereoForward } from './physics/stereo';
 
@@ -455,7 +455,8 @@ function renderInfo() {
   const rs = resolution2D(R, bc, s.transfer('slice'), zs, TAU, dW);
   const rt = resolution2D(R, bc, s.transfer('sum'), zs, TAU, dW);
   const th = near[0]?.angle ?? 0;
-  const dzEff = Math.max(p.sliceThickness, p.depthRes);
+  // effective depth length of the slice (A -> nm): 1 / pass width, = depth FWHM deep inside, <= t
+  const dzEff = 1 / passWidth(s.transfer('slice')) / 10;
   const fmtD = (r: { d: number; zone: Vec3 | null }) => (Number.isFinite(r.d) && r.d <= dW ? `${fmt(r.d, 2)} Å <span class="muted">(${htmlDir(L, r.zone!)})</span>` : `&gt; ${fmt(dW, 1)} Å`);
   info.innerHTML = `
     <div class="tiltrow"><span class="${lim(a, p.alphaLim)}">α <b>${fmt(a, 2)}°</b></span><span class="${lim(b, p.betaLim)}">β <b>${fmt(b, 2)}°</b></span>

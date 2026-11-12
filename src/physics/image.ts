@@ -1,13 +1,14 @@
 // Fourier coefficients of the real-space phase image (pure, so it can be tested without WebGL).
-// phi(x, y) = sigma * sum_g V_g * L(g_perp) * D(g_z) * exp(2 pi i g_perp . r), with
-//   depth sum : D = T sinc(T g_z) exp(-i pi g_z T)          (slab from depth 0 to T)
-//   MEP slice : D = dz sinc(dz g_z) exp(-2 pi^2 sz^2 g_z^2) exp(-2 pi i g_z z0)
+// phi(x, y) = sigma * sum_g V_g * L(g_perp) * D(g_z) * exp(2 pi i g_perp . r), where D is the
+// Fourier transform of the depth weight w(zeta) (transfer.ts: depthWeight / depthFT):
+//   depth sum : w = box [0, T]           -> D = T sinc(T g_z) exp(-i pi g_z T)
+//   MEP slice : w = box_T (box_dz (*) G)  -> deep inside: dz sinc(dz g_z) exp(-2 pi^2 sz^2 g_z^2) exp(-2 pi i g_z z0)
 // Lab z points to the gun, so depth zeta is z = -zeta. Exact for a perfect crystal slab; this is
 // where tilt-induced column smearing (t tan(theta)) comes from.
 import { ReflectionSet } from './structure';
 import { Mat3 } from './linalg';
 import { sigmaInteraction, VOLT_A2 } from './constants';
-import { TransferParams, lateralTransfer, sinc } from './transfer';
+import { TransferParams, lateralTransfer, depthWeight, depthFT } from './transfer';
 
 export const MAX_COEF = 4096;
 
@@ -19,9 +20,9 @@ export const MAX_COEF = 4096;
 export function imageCoefficients(R: ReflectionSet, rot: Mat3, volume: number, kV: number, tp: TransferParams, maxCoef = MAX_COEF): { data: Float32Array; n: number } {
   const sig = sigmaInteraction(kV);
   const vk = (VOLT_A2 / volume) * sig * 2;
-  const T = tp.totalThickness, dz = tp.sliceThickness, z0 = tp.sliceDepth;
-  const sz = tp.depthRes / 2.354820045;
+  const dw = depthWeight(tp);
   const list: number[][] = [];
+  if (!(dw.area > 0)) return { data: new Float32Array(4), n: 0 };
   let amax = 0;
   for (let i = 0; i < R.n; i++) {
     const h = R.hkl[3 * i], k = R.hkl[3 * i + 1], l = R.hkl[3 * i + 2];
@@ -32,18 +33,14 @@ export function imageCoefficients(R: ReflectionSet, rot: Mat3, volume: number, k
     const az = rot[6] * gx + rot[7] * gy + rot[8] * gzc;
     const lat = lateralTransfer(Math.hypot(ax, ay), tp.lateralRes);
     if (lat < 1e-4) continue;
-    let dm: number, dph: number;
-    if (tp.mode === 'sum') {
-      dm = T * sinc(T * az);
-      dph = -Math.PI * az * T;
-    } else {
-      dm = dz * sinc(dz * az) * Math.exp(-2 * Math.PI * Math.PI * sz * sz * az * az);
-      dph = -2 * Math.PI * az * z0;
-    }
-    const amp = vk * lat * dm;
-    const a = Math.abs(amp) * Math.hypot(R.Fre[i], R.Fim[i]);
+    const fa = vk * lat * Math.hypot(R.Fre[i], R.Fim[i]);
+    // |D| <= min(area, tv / 2 pi |g_z|): skip what cannot pass the cut below (amax only grows)
+    const bound = fa * Math.min(dw.area, dw.tv / (2 * Math.PI * Math.abs(az)));
+    if (bound < 1e-7 || bound <= amax * 1e-4) continue;
+    const [dr, di] = depthFT(dw, az);
+    const a = fa * Math.hypot(dr, di);
     if (a < 1e-7) continue;
-    const ph = Math.atan2(R.Fim[i], R.Fre[i]) + dph + (amp < 0 ? Math.PI : 0);
+    const ph = Math.atan2(R.Fim[i], R.Fre[i]) + Math.atan2(di, dr);
     list.push([ax, ay, a, ph]);
     amax = Math.max(amax, a);
   }
