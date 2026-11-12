@@ -17,8 +17,8 @@ Related: [README.md](README.md) (use, physics summary, deploy).
 | version | `0.0.1` on `main` (tag `v0.0.1`, merged from `feat/v1-app`). Session 2 work is on `feat/session-2` (not merged; becomes 0.0.2). No remote yet. History: [CHANGELOG.md](CHANGELOG.md) |
 | stack | Vite 7 + TypeScript 5.9 + three.js 0.187, raw WebGL2 shaders; static site, no backend |
 | installed | npm packages only, local to `node_modules/` (see `package.json`): three, vite, vitest 3, typescript 5, vite-plugin-singlefile, playwright-core (drives the system `/usr/bin/google-chrome`; no browser download), @types/three. No conda env was created. Node 20.20 (nvm) was already present |
-| tests | `npm test`: 44 vitest tests (29 physics, 15 UI helpers) |
-| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 23/23 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
+| tests | `npm test`: 50 vitest tests (29 physics, 21 UI helpers/state) |
+| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 26/26 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
 | builds | `npm run build:pages` produces `dist/` (site) and `dist/zoner.html` (~650 kB single file, runs from `file://`) |
 | deploy | `.github/workflows/pages.yml` (test, build, deploy on push to `main`). Needs a GitHub repo + Pages source "GitHub Actions" (§2) |
 
@@ -37,17 +37,17 @@ node bench/e2e.mjs --swiftshader    # software GL, slow-device worst case
 - [ ] Create the GitHub repo and push (not done by Claude: pushing publishes). For example:
       `gh repo create zoner --public --source . --remote origin && git push -u origin main --tags`.
       Then Settings → Pages → Source: GitHub Actions. Pages on a private repo needs a paid plan.
-- [ ] Review `feat/session-2` (2×2 layout, single α, rings, legend) and ask for the merge (→ 0.0.2).
+- [ ] Review `feat/session-2` (2×2 layout, single α, rings, legend, holder switch) and ask for the merge (→ 0.0.2).
 - [ ] Pick a license (package.json says `UNLICENSED` for now). three.js is MIT. The Lobato
       coefficients are published numbers (cited).
 - [ ] At the microscope: does the DP orientation and handedness match your camera? The app shows the
       pattern seen from the gun, with no camera rotation. A per-microscope rotation/flip setting is §3 P1.
 - [ ] Do the arrow-key senses feel natural (the pattern moves the way of the arrow)? Is the default
       step 0.2° right?
-- [ ] Do the defaults (300 kV, α = 3 mrad, 20 nm, Δz = 2 nm, depth 4.9 nm, lateral 0.5 Å) match
-      your MEP conditions? Since session 2 α is the single convergence angle (default 3 mrad for the
-      DP), so the λ/2α and λ/α² estimate buttons now use 3 mrad unless you change it; the lateral and
-      depth resolutions themselves stay at their MEP values (0.5 Å, 4.9 nm).
+- [ ] Do the defaults (300 kV, α = 3 mrad, 20 nm, Δz = 2 nm, depth 3 nm, lateral 0.5 Å) match
+      your MEP conditions?
+- [ ] Holder switch semantics: switching on keeps the orientation and relabels it with the stage
+      reading typed in (prefilled with the current α/β). Is that the workflow you meant?
 
 ## 3. Next actions (prioritized; each has "done when")
 
@@ -154,7 +154,16 @@ bench/e2e.mjs       headless Chrome: smoke, 23 checks, timings, screenshots (-> 
   matches what the eye sees: a 0.5 mrad disk is a spot at 2.2 Å⁻¹ half-width but a disk at
   0.1 Å⁻¹. Training forces α = 0. The √/log auto display switches on real overlap (2r > g_min);
   the old 0.9·g_min flattened the default 3 mrad Si [110] pattern, whose disks nearly touch.
-- **Tilt rings** measure the total tilt angle from the current beam (circles of radius tan(θ/2) on
+- **Holder range switch** (session 2b, user request): off by default so the simulated tilt can go
+  anywhere while matching an observed pattern. Switching on calls `Store.engageHolder(α, β)`:
+  M' = (Rx(α)Ry(β))ᵀ·R keeps the crystal orientation and makes the readout equal the stage reading;
+  readings outside the range are refused. The reading fields are prefilled with the current α/β, so
+  switching on without typing only enables the limits. Assumes the simulated holder axes match the
+  real ones (camera rotation/flip is §3 P1).
+- **Map follows the image** (session 2b, user request): one `imgMode` for both. With the default
+  depth sum through 20 nm the map's bright regions are small (tilt tolerance ≈ lateral/t ≈ 0.15°);
+  that is correct and is the reason MEP slices help.
+- **Tilt rings** (off by default since session 2b; hover gives the same number) measure the total tilt angle from the current beam (circles of radius tan(θ/2) on
   the beam-centred map), not |Δα|/|Δβ|, which are not concentric. The hover readout gives the
   holder α/β for any point, and the "go" table gives them for zones.
 - **Links carry `v=2`.** Links without it are from 0.0.1; their `convAlpha` was the imaging
@@ -246,10 +255,11 @@ disks drawn (α > 0 and big enough at the current zoom).
 | kinematic / two-beam DP | works | works (per-pixel rocking) | works (4-index labels) | works | works; reflections capped at 40k (g_max lowered) | works |
 | Bloch DP | works (idle-time) | partial: disks uniformly filled (no rocking) | works (complex U via embedding) | works | slow above ~150 beams | works |
 | Kikuchi bands | works | works | works | works | works (64 strongest planes) | works |
-| resolution map + tilt rings + hover | n/a | n/a | works (index ≤ setting in 3-index) | works | slower (more ZOLZ reflections) | works (rings; no hover on touch) |
+| resolution map (follows image mode) + rings + hover | n/a | n/a | works (index ≤ setting in 3-index) | works | slower (more ZOLZ reflections) | works (rings; no hover on touch) |
 | real-space image (sum / slice toggle) | n/a | n/a | works | works | coefficients capped at 4096 | works |
 | 3D legend | n/a | n/a | works | works (any element; unknown colour falls back to pink) | works | works |
 | 2×2 fit-to-window layout | n/a | n/a | n/a | n/a | n/a | n/a: phones (< 900 px) stack and scroll by design |
+| holder range switch | works | works | works | works | works | works |
 | training | works (forced α = 0) | n/a | works | works | works | works (touch drag; no keys) |
 | CIF without symops | n/a | n/a | n/a | treated as P1, with a toast warning | n/a | n/a |
 | offline single file | works | works | works | works | works | works |
@@ -286,3 +296,7 @@ real microscope camera orientations (§2).
     collapsed onto each other on phones. All fixed with e2e checks.
   - Benchmarks: v0.0.1 vs session 2 on the same machine (§8). 23/23 e2e checks on GPU and
     SwiftShader, 0 console errors.
+  - Second round (user feedback): rings toggle (off), λ/2α and λ/α² buttons removed (defaults 0.5 Å /
+    3 nm), stereogram follows the image toggle, holder range switch with engage-at-stage-reading.
+    Fixed arrow keys being swallowed by a focused checkbox. 50 unit tests, 26/26 e2e on GPU and
+    SwiftShader; timings unchanged.

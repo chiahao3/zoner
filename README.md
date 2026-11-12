@@ -9,10 +9,10 @@ on the right, and the orientation panel in a rail on the right (ⓘ hides it, �
 | panel | what it shows |
 |---|---|
 | **Diffraction** (top left) | Reflections at their excitation error, as spots or CBED disks. One convergence angle α sets the illumination: α = 0 is a parallel beam; otherwise disks of radius α are drawn as CBED once they are larger than the spot size (default 3 mrad). Kikuchi bands. An arrow to the nearest zone axis with its angle. Choice of theory: kinematic, per-reflection two-beam (dynamical, real time), or a many-beam Bloch wave computed whenever you stop moving. |
-| **Resolution stereogram** (bottom left) | A map centred on the beam, coloured by the projected 2D resolution you would get if you tilted to that direction. It responds to the slice thickness, depth resolution and total thickness. Zone markers are coloured by the resolution reached *on* that zone. Dashed rings mark the total tilt from the current orientation (e.g. 10°, 20°, 30°); hovering shows the tilt and the α/β needed. Hatching marks orientations beyond the holder range. |
+| **Resolution stereogram** (bottom left) | A map centred on the beam, coloured by the projected 2D resolution you would get if you tilted to that direction, for the image currently shown (depth sum or MEP slice; one toggle drives both). It responds to the slice thickness, depth resolution and total thickness. Zone markers are coloured by the resolution reached *on* that zone. Hovering shows the total tilt from the beam and the α/β needed; **Rings** adds dashed rings of total tilt (off by default). With the holder range on, unreachable orientations are hatched. In depth-sum mode the bright regions are small: a 20 nm projection tolerates only ~0.15° of tilt at 0.5 Å. |
 | **Crystal model** (top right) | The specimen slab, with slice boundaries and the current MEP slice highlighted, or a unit-cell cluster. A legend lists each species. |
-| **Real-space image** (bottom right) | Depth sum (default) or MEP slice, switched in the panel header: the phase image σ∫V dz of the tilted crystal. Tilt smears the columns by t·tanθ. |
-| **Orientation** (rail) | α, β and the beam direction. The holder range (symmetric: α −35° … +35°). The nearest zones with the α/β needed to reach each one, and a "go" button for each. The current 2D resolution and the column smear. |
+| **Real-space image** (bottom right) | Depth sum (default) or MEP slice, switched in the panel header (the stereogram follows): the phase image σ∫V dz of the tilted crystal. Tilt smears the columns by t·tanθ. |
+| **Orientation** (rail) | The **holder range** switch (off by default): tilt freely until the simulation matches the observed pattern, enter the stage α/β reading (prefilled with the current values) and switch on. The orientation is kept, the α/β readout now matches the stage, and tilts are limited to the range (symmetric: 35 means −35° … +35°). Below: α, β, the beam direction, the nearest zones with the α/β needed to reach each one and a "go" button, the current 2D resolution and the column smear. |
 
 Built-in crystals are Si, SrTiO3, Al, Au, Cu, GaAs, MgO, Fe (bcc) and GaN (wurtzite). Any CIF that
 lists its symmetry operators can be loaded, either with **CIF…** or by dropping the file on the page.
@@ -44,6 +44,8 @@ long it takes you to get on zone.
   zone wins. On zone this equals the lateral resolution. Off zone it equals the column smear
   (t·tanθ, or depth-FWHM·tanθ).
 
+Defaults for the MEP model: lateral resolution 0.5 Å, depth resolution 3 nm, slice thickness 2 nm.
+
 These are qualitative tools: feature positions and symmetry are right, and intensities are
 approximate.
 
@@ -54,9 +56,9 @@ Version history: [CHANGELOG.md](CHANGELOG.md).
 ```bash
 npm ci
 npm run dev          # http://localhost:5173
-npm test             # vitest: physics core + UI helpers (44 tests)
+npm test             # vitest: physics core + UI helpers (50 tests)
 npm run build:pages  # dist/ (+ dist/zoner.html)
-node bench/e2e.mjs --gpu          # headless Chrome: 23 checks, timings, screenshots -> ~/scratch/zoner-bench
+node bench/e2e.mjs --gpu          # headless Chrome: 26 checks, timings, screenshots -> ~/scratch/zoner-bench
 node bench/e2e.mjs --swiftshader  # same on software GL (slow-laptop worst case)
 ```
 

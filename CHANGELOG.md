@@ -28,9 +28,22 @@ Session 2 (branch `feat/session-2`; becomes 0.0.2 when merged).
 - Links carry `v=2`; links from 0.0.1 are migrated (DP convergence → the single angle).
 - Tests: `tests/ui.test.ts` (auto illumination, ring spacing, canvas sizing, species legend, link
   migration); e2e grew from 12 to 23 checks (layout fit at four window sizes, image toggle, legend,
-  illumination, rings, hover, phone stacking).
+  illumination, rings, hover, phone stacking), then 26 (rings toggle, map follows the image, holder
+  switch).
+
+### Changed (session 2, second round)
+- Tilt rings are off by default (the hover readout gives the same number); **Rings** button in the
+  stereogram header.
+- The λ/2α and λ/α² estimate buttons are gone. Defaults: lateral resolution 0.5 Å, depth
+  resolution 3 nm (was 4.9 nm).
+- The stereogram colouring follows the image toggle (depth sum or MEP slice); the separate map
+  source setting is gone. Default is depth sum for both.
+- Holder range is a switch in the orientation panel, off by default. Switching on takes the
+  current orientation as the stage α/β reading (prefilled, editable) and then enforces the range and
+  hatches the map.
 
 ### Fixed
+- Arrow keys stopped working after clicking a checkbox.
 - Canvases capped at their maximum backing size kept the cap per side, which stretched non-square
   panels; both sides now scale together.
 
