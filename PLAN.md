@@ -10,16 +10,16 @@ Related: [README.md](README.md) (use, physics summary, deploy).
 
 ---
 
-## 1. Start here (state at the end of session 4, 2026-11-12: version 0.0.4, public on GitHub)
+## 1. Start here (state at 2026-11-12: version 0.0.5, public on GitHub)
 
 | item | state |
 |------|-------|
-| version | `0.0.4` on `main` (tag `v0.0.4`, merged from `feat/session-4`, which contains `feat/session-3`). `v0.0.3` marks the end of session 3 (`94d2455`, tagged afterwards; its package.json reads 0.0.2). Earlier: `v0.0.2`, `v0.0.1`. History: [CHANGELOG.md](CHANGELOG.md) |
+| version | `0.0.5` on `main` (tag `v0.0.5`, merged from `feat/remove-training`: training mode removed). `0.0.4` (tag `v0.0.4`) merged `feat/session-4`, which contains `feat/session-3`. `v0.0.3` marks the end of session 3 (`94d2455`, tagged afterwards; its package.json reads 0.0.2). Earlier: `v0.0.2`, `v0.0.1`. History: [CHANGELOG.md](CHANGELOG.md) |
 | public | repo https://github.com/chiahao3/zoner (public, remote `origin`, ssh); site https://chiahao3.github.io/zoner/ (GitHub Pages, deployed by Actions on every push to `main`); offline file https://chiahao3.github.io/zoner/zoner.html. Releasing: §10 |
 | stack | Vite 7 + TypeScript 5.9 + three.js 0.187, raw WebGL2 shaders; static site, no backend |
 | installed | npm packages only, local to `node_modules/` (see `package.json`): three, vite, vitest 3, typescript 5, vite-plugin-singlefile, playwright-core (drives the system `/usr/bin/google-chrome`; no browser download), @types/three. No conda env was created. Node 20.20 (nvm) was already present |
 | tests | `npm test`: 85 vitest tests (29 physics, 9 depth weight, 47 UI helpers/state) |
-| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 40/40 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
+| e2e | `node bench/e2e.mjs --gpu` and `--swiftshader`: no console errors, 41/41 checks, timings + screenshots in `~/scratch/zoner-bench/` (local disk; the repo is on an sshfs mount) |
 | builds | `npm run build:pages` produces `dist/` (site) and `dist/zoner.html` (~650 kB single file, runs from `file://`) |
 | deploy | `.github/workflows/pages.yml` (test, build, deploy on push to `main`); Pages source is "GitHub Actions" (set via the API at the first release, §10) |
 
@@ -462,3 +462,6 @@ then enable Pages with the Actions source:
   - Released 0.0.4: merged `feat/session-4` into `main`, tagged, first push to the public repo,
     Pages enabled (§10 records the steps). Then tagged `v0.0.3` at the session-3 tip (`94d2455`)
     for completeness and split the changelog into 0.0.3 and 0.0.4.
+- **2026-11-12, 0.0.5** (`feat/remove-training`). Training mode removed at the user's request (not
+  ready). 85 unit tests; e2e 41/41 on GPU and SwiftShader, 0 console errors (Z key and "no
+  training" checks replace the training check); timings unchanged. Released by §10.

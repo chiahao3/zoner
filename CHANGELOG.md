@@ -5,6 +5,8 @@ versions follow [SemVer](https://semver.org/) (0.0.x while the UI is still movin
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-11-12
+
 ### Removed
 - Training mode (the Training button, T and H keys, the timed rounds and best times): not ready
   for use. Z (go to the nearest zone) stays. Best times saved in a browser's local storage
