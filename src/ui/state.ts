@@ -58,7 +58,7 @@ export interface Params {
 }
 
 export const DEFAULTS: Params = {
-  crystal: 'Si', kV: 300, convAlpha: 3, collAngle: 90, thickness: 20, sliceThickness: 2, depthRes: 3, depthAuto: false, lateralRes: 0.5, lateralAuto: false,
+  crystal: 'Si', kV: 300, convAlpha: 3, collAngle: 64, thickness: 20, sliceThickness: 2, depthRes: 3, depthAuto: false, lateralRes: 0.5, lateralAuto: false,
   sliceDepth: 10, dw: 0.5,
   dpTheory: 'twobeam', dpRange: 2.2, dpDisplay: 'auto', dpDecades: 3.5, dpSpot: 2.2, kikuchi: 0.5,
   dpLabels: true, dpLaue: false, dpDetector: false, dpCmap: 'gray', blochBeams: 61,

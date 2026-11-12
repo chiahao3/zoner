@@ -107,7 +107,7 @@ timings.push(await bench('SrTiO3 [001]', "z.store.p.lateralRes=0.5; z.store.load
 timings.push(await bench('GaN [2-1-10]', "z.store.loadCrystal('GaN');"));
 timings.push(await bench('Si thin 0.5 nm, slice', "z.store.loadCrystal('Si'); z.store.p.thickness=0.5; z.store.p.sliceDepth=0.25;"));
 timings.push(await bench('Si auto depth (alpha 25 mrad -> 3.15 nm)', "z.store.p.thickness=20; z.store.p.sliceDepth=10; z.store.set('convAlpha', 25); z.store.set('depthAuto', true);"));
-timings.push(await bench('Si lambda/beta (90 mrad -> 0.219 A)', "z.store.set('depthAuto', false); z.store.p.depthRes=3; z.store.p.convAlpha=3; z.store.set('lateralAuto', true);"));
+timings.push(await bench('Si lambda/beta (64 mrad -> 0.308 A)', "z.store.set('depthAuto', false); z.store.p.depthRes=3; z.store.p.convAlpha=3; z.store.set('lateralAuto', true);"));
 timings.push(await bench('Si detector range on, map synced to DP', "z.store.set('lateralRes', 0.5); z.store.set('dpDetector', true); z.store.set('dpRange', 6); z.store.set('mapSyncDP', true);"));
 await page.evaluate(() => { const s = window.zoner.store; s.set('mapSyncDP', false); s.set('mapRange', 20); s.set('dpDetector', false); s.set('dpRange', 2.2); s.set('lateralAuto', false); s.p.lateralRes = 0.5; s.set('depthAuto', false); s.p.depthRes = 3; s.p.convAlpha = 3; s.p.thickness = 20; s.p.sliceDepth = 10; });
 // Bloch timings at several N
@@ -504,8 +504,8 @@ await pf.locator('#ctl-convAlpha').press('Tab');
 await pf.waitForTimeout(150);
 const u1 = await unitTxt();
 const a25 = await pf.evaluate(() => ({ p: window.zoner.store.p.convAlpha, v: document.getElementById('ctl-convAlpha').value }));
-check('angle fields: typed in mrad, 1/A shown in brackets, not clipped (3 mrad 0.152, 90 mrad 4.57, 25 mrad 1.27)',
-  u0.a === 'mrad (0.152 Å⁻¹)' && u0.b === 'mrad (4.57 Å⁻¹)' && u1.a === 'mrad (1.27 Å⁻¹)' && !u0.clipped && a25.p === 25 && a25.v === '25', { u0, u1, a25 });
+check('angle fields: typed in mrad, 1/A shown in brackets, not clipped (3 mrad 0.152, 64 mrad 3.25, 25 mrad 1.27)',
+  u0.a === 'mrad (0.152 Å⁻¹)' && u0.b === 'mrad (3.25 Å⁻¹)' && u1.a === 'mrad (1.27 Å⁻¹)' && !u0.clipped && a25.p === 25 && a25.v === '25', { u0, u1, a25 });
 await pf.locator('#side details').first().screenshot({ path: join(out, `side-angles-${mode}.png`) });
 await pf.evaluate(() => window.zoner.store.set('convAlpha', 3));
 // detector range toggle
@@ -520,7 +520,7 @@ await pf.locator('#panel-dp button', { hasText: 'Detector' }).click();
 await pf.waitForTimeout(250);
 const det3 = await pf.evaluate(() => ({ on: window.zoner.store.p.dpDetector, d: window.zoner.dp.detector }));
 check('Detector button toggles the square detector (half-width = collection angle) on the DP (covers the view at 2.2 1/A, edge drawn at 6 1/A)',
-  det1.on && det1.btn === 'Detector' && det1.d && !det1.d.visible && Math.abs(det1.d.rq - 4.571) < 0.01 && det2.visible && !det3.on && det3.d === null, { det1, det2, det3 });
+  det1.on && det1.btn === 'Detector' && det1.d && !det1.d.visible && Math.abs(det1.d.rq - 3.251) < 0.01 && det2.visible && !det3.on && det3.d === null, { det1, det2, det3 });
 await pf.evaluate(() => window.zoner.store.set('dpRange', 2.2));
 // DP hover at the [110] Kikuchi centre: same alpha/beta as the "go" table, consistent deg / mrad / 1/A
 await pf.evaluate(() => { const z = window.zoner; z.store.mountZone([1, 1, 0]); z.store.setTilt(1.2 * Math.PI / 180, -0.7 * Math.PI / 180); z.dp.pan = [0, 0]; z.markAll(); });
@@ -533,7 +533,11 @@ const tgt = await pf.evaluate(() => {
 await pf.mouse.move(tgt.x, tgt.y);
 await pf.waitForTimeout(150);
 const dpHov = await pf.locator('#dp-lbl').innerText();
-const m = dpHov.match(/([\d.]+)° from beam \(([\d.]+) mrad, ([\d.]+) Å⁻¹\) · α (-?[\d.]+)° β (-?[\d.]+)°/);
+await pf.evaluate(() => window.zoner.store.set('dpDetector', true));
+await pf.waitForTimeout(250);
+await pf.locator('#panel-dp').screenshot({ path: join(out, `dp-hover-${mode}.png`) });
+await pf.evaluate(() => window.zoner.store.set('dpDetector', false));
+const m = dpHov.match(/([\d.]+)° from beam \(([\d.]+) mrad, ([\d.]+) Å⁻¹\)\s+α (-?[\d.]+)° β (-?[\d.]+)°/);
 const qAbs = Math.hypot(...tgt.q);
 const okHover = m && Math.abs(+m[4] - +tgt.row[2]) < 0.03 && Math.abs(+m[5] - +tgt.row[3]) < 0.03 && Math.abs(+m[1] - parseFloat(tgt.row[1])) < 0.03
   && Math.abs(+m[2] - +m[1] * Math.PI / 180 * 1000) < 0.2 && Math.abs(+m[3] - qAbs) < 0.004;
@@ -576,9 +580,9 @@ await pf.locator('#ctl-lateralRes').fill('0.5');
 await pf.locator('#ctl-lateralRes').press('Tab');
 await pf.waitForTimeout(150);
 const lb3 = await pf.evaluate(() => ({ p: window.zoner.store.p.lateralRes, on: document.getElementById('ctl-lateralAuto').checked }));
-check('λ/β checkbox fills the lateral resolution (90 mrad: 0.219 Å, 60 mrad: 0.328 Å); typing a value unchecks it',
-  lb1.v === 0.219 && lb1.p === 0.219 && lb2.p === 0.328 && lb2.on && lb3.p === 0.5 && !lb3.on, { lb1, lb2, lb3 });
-await pf.evaluate(() => window.zoner.store.set('collAngle', 90));
+check('λ/β checkbox fills the lateral resolution (64 mrad: 0.308 Å, 60 mrad: 0.328 Å); typing a value unchecks it',
+  lb1.v === 0.308 && lb1.p === 0.308 && lb2.p === 0.328 && lb2.on && lb3.p === 0.5 && !lb3.on, { lb1, lb2, lb3 });
+await pf.evaluate(() => window.zoner.store.set('collAngle', 64));
 // global display range: the reference zone's phase range, per image mode; auto contrast off by default
 const gr = await pf.evaluate(() => {
   const z = window.zoner, s = z.store;

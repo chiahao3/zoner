@@ -232,7 +232,8 @@ function tiltReadout(u: Vec3, extra: string, thDeg: number) {
   const p = store.p;
   const out = p.enforceLimits && (Math.abs(t.alpha) > p.alphaLim * DEG || Math.abs(t.beta) > p.betaLim * DEG);
   const f2 = (x: number) => fmt(Math.abs(x) < 0.005 ? 0 : x, 2); // no "-0.00"
-  return `<div class="hover${out ? ' out' : ''}">${fmt(thDeg, thDeg < 10 ? 2 : 1)}° from beam${extra} · α ${f2(t.alpha / DEG)}° β ${f2(t.beta / DEG)}°${out ? ' (beyond range)' : ''}</div>`;
+  // two lines: the angle, then the holder tilt (keeps clear of the indicators at the top right)
+  return `<div class="hover${out ? ' out' : ''}">${fmt(thDeg, thDeg < 10 ? 2 : 1)}° from beam${extra}<br>α ${f2(t.alpha / DEG)}° β ${f2(t.beta / DEG)}°${out ? ' (beyond range)' : ''}</div>`;
 }
 // DP pointer readout: the direction whose Kikuchi centre is under the pointer (its angle from the
 // beam in deg, mrad and 1/A, which is also the scattering angle of a spot there) and its alpha/beta

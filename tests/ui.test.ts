@@ -290,8 +290,10 @@ describe('auto depth resolution (lambda / alpha^2)', () => {
 
 describe('session 4: collection angle, detector range, derived 1/A, DP hover, lambda/beta, map FOV sync', () => {
   const K = 1 / wavelength(300);
-  it('defaults: collection angle 90 mrad; detector range, lambda/beta and map sync off', () => {
-    expect(DEFAULTS.collAngle).toBe(90);
+  it('defaults: collection angle 64 mrad; detector range, lambda/beta and map sync off', () => {
+    expect(DEFAULTS.collAngle).toBe(64);
+    expect(angleUnitText(DEFAULTS.collAngle, 300)).toBe('mrad (3.25 Å⁻¹)');
+    expect(autoLateralRes(300, DEFAULTS.collAngle)).toBe(0.308);
     expect(DEFAULTS.dpDetector).toBe(false);
     expect(DEFAULTS.lateralAuto).toBe(false);
     expect(DEFAULTS.mapSyncDP).toBe(false);
@@ -319,7 +321,7 @@ describe('session 4: collection angle, detector range, derived 1/A, DP hover, la
   it('lambda / beta checkbox: fills, follows kV and the collection angle, a typed value unchecks it', () => {
     const s = new Store();
     s.set('lateralAuto', true);
-    expect(s.p.lateralRes).toBe(autoLateralRes(300, 90));
+    expect(s.p.lateralRes).toBe(autoLateralRes(300, DEFAULTS.collAngle));
     s.set('collAngle', 60);
     expect(s.p.lateralRes).toBe(autoLateralRes(300, 60));
     s.set('kV', 200);

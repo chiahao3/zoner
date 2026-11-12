@@ -493,7 +493,7 @@ export class DPView {
       // the edge is in view unless the square covers the whole panel
       const visible = cx - rd > 0 || cx + rd < r.width || cy - rd > 0 || cy + rd < r.height;
       this.detector = { rq, visible };
-      const txt = `square detector β ${fmt(p.collAngle, p.collAngle < 10 ? 1 : 0)} mrad (${fmt(rq, rq < 1 ? 3 : 2)} Å⁻¹) half-width`;
+      const txt = `detector ±${fmt(p.collAngle, p.collAngle < 10 ? 1 : 0)} mrad (±${fmt(rq, rq < 1 ? 3 : 2)} Å⁻¹)`; // ± = square half-width
       ctx.save();
       if (visible) {
         const outside = new Path2D();
@@ -517,10 +517,11 @@ export class DPView {
         ctx.strokeRect(cx - rd, cy - rd, 2 * rd, 2 * rd);
       }
       ctx.fillStyle = '#ffb4ae';
-      ctx.textAlign = 'left';
+      ctx.textAlign = 'right'; // upper right, under the illumination line: the hover box is top left
       ctx.shadowColor = '#000';
       ctx.shadowBlur = 3;
-      ctx.fillText(visible ? txt : `${txt}: beyond the view, zoom out`, 8, 32);
+      ctx.fillText(txt, r.width - 8, 32);
+      if (!visible) ctx.fillText('beyond the view: zoom out', r.width - 8, 46);
       ctx.restore();
     }
     // scale bar: a round number of 1/A, also in mrad
@@ -535,8 +536,8 @@ export class DPView {
     ctx.stroke();
     ctx.textAlign = 'left';
     ctx.fillText(`${nice} Å⁻¹ = ${fmt(nice * s.lambda * 1e3, 1)} mrad`, 12, r.height - 20);
-    ctx.textAlign = 'left';
-    ctx.fillText(this.cbed ? `CBED α ${fmt(p.convAlpha, 1)} mrad` : p.convAlpha > 0 ? `α ${fmt(p.convAlpha, 1)} mrad: disks < spot size, drawn as spots` : 'parallel beam', 8, 16);
+    ctx.textAlign = 'right'; // upper right: the hover readout sits top left
+    ctx.fillText(this.cbed ? `CBED α ${fmt(p.convAlpha, 1)} mrad` : p.convAlpha > 0 ? `α ${fmt(p.convAlpha, 1)} mrad: disks < spot size, drawn as spots` : 'parallel beam', r.width - 8, 16);
     const st = this.blochStatus();
     if (st) {
       ctx.textAlign = 'right';
